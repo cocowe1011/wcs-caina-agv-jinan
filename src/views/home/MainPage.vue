@@ -2,18 +2,18 @@
   <div class="smart-workshop">
     <!-- 添加标题区域 -->
     <div class="header">
-      <img src="@/assets/jinan-agv/header.png" alt="header" class="header-bg">
+      <img src="@/assets/jinan-agv/header.png" alt="header" class="header-bg" />
       <div class="header-content">
         <div class="title">智慧大屏监控</div>
         <div class="floor-switch">
-          <button 
-            :class="['switch-btn', currentFloor === 1 ? 'active' : '']" 
+          <button
+            :class="['switch-btn', currentFloor === 1 ? 'active' : '']"
             @click="switchFloor(1)"
           >
             2800车间
           </button>
-          <button 
-            :class="['switch-btn', currentFloor === 2 ? 'active' : '']" 
+          <button
+            :class="['switch-btn', currentFloor === 2 ? 'active' : '']"
             @click="switchFloor(2)"
           >
             2500车间

@@ -1,11 +1,19 @@
 <template>
   <div class="floor-image-container">
     <div class="image-wrapper">
-      <img src="@/assets/jinan-agv/2500.png" alt="一楼平面图" class="floor-image" @load="updateMarkerPositions">
+      <img
+        src="@/assets/jinan-agv/2500.png"
+        alt="一楼平面图"
+        class="floor-image"
+        @load="updateMarkerPositions"
+      />
       <!-- 上货扫码区域提示 -->
       <div class="marker-with-panel" data-x="200" data-y="360">
         <div class="pulse"></div>
-        <div class="data-panel" :class="['position-right', { 'always-show': true }]">
+        <div
+          class="data-panel"
+          :class="['position-right', { 'always-show': true }]"
+        >
           <div class="data-panel-header">
             <span>上货扫码信息</span>
           </div>
@@ -28,12 +36,16 @@
       <!-- 添加带按钮的点位示例 -->
       <div class="marker-with-button" data-x="850" data-y="400">
         <div class="pulse"></div>
-        <button class="marker-button" @click="handlePalletStorageClick">托盘缓存区操作</button>
+        <button class="marker-button" @click="handlePalletStorageClick">
+          托盘缓存区操作
+        </button>
       </div>
       <!-- 添加带按钮的点位示例 -->
       <div class="marker-with-button" data-x="950" data-y="225">
         <div class="pulse"></div>
-        <button class="marker-button" @click="handleEmptyPalletStorageClick">空托盘缓存区操作</button>
+        <button class="marker-button" @click="handleEmptyPalletStorageClick">
+          空托盘缓存区操作
+        </button>
       </div>
     </div>
 
@@ -47,34 +59,41 @@
       custom-class="storage-drawer"
     >
       <div class="storage-container">
-        <div v-for="(position, index) in palletStoragePositions" 
-             :key="index" 
-             class="storage-card"
-             :class="{'can-move': position.palletCode}">
+        <div
+          v-for="(position, index) in palletStoragePositions"
+          :key="index"
+          class="storage-card"
+          :class="{ 'can-move': position.palletCode }"
+        >
           <div class="storage-card-header">
             <span>位置 {{ position.name }}</span>
             <div class="card-actions">
-              <el-button 
-                v-if="!position.palletCode" 
-                type="text" 
+              <el-button
+                v-if="!position.palletCode"
+                type="text"
                 size="mini"
-                @click="handleAddPallet(position)">
+                @click="handleAddPallet(position)"
+              >
                 <i class="el-icon-plus"></i>
                 添加托盘
               </el-button>
               <template v-else>
-                <el-button 
-                  type="text" 
+                <el-button
+                  type="text"
                   size="mini"
-                  @click="position.palletCode && handlePalletCardClick(position)">
+                  @click="
+                    position.palletCode && handlePalletCardClick(position)
+                  "
+                >
                   <i class="el-icon-position"></i>
                   移动
                 </el-button>
-                <el-button 
-                  type="text" 
+                <el-button
+                  type="text"
                   size="mini"
                   class="danger-button"
-                  @click="handleRemovePallet(position)">
+                  @click="handleRemovePallet(position)"
+                >
                   <i class="el-icon-delete"></i>
                   移除
                 </el-button>
@@ -108,18 +127,21 @@
       custom-class="storage-drawer"
     >
       <div class="storage-container">
-        <div v-for="(position, index) in emptyPalletStoragePositions" 
-             :key="index" 
-             class="storage-card">
+        <div
+          v-for="(position, index) in emptyPalletStoragePositions"
+          :key="index"
+          class="storage-card"
+        >
           <div class="storage-card-header">
             <span>位置 {{ position.name }}</span>
             <div class="card-actions">
               <template v-if="position.palletCode">
-                <el-button 
-                  type="text" 
+                <el-button
+                  type="text"
                   size="mini"
                   class="danger-button"
-                  @click="handleRemovePallet(position)">
+                  @click="handleRemovePallet(position)"
+                >
                   <i class="el-icon-delete"></i>
                   移除
                 </el-button>
@@ -153,11 +175,12 @@
     >
       <el-form :model="palletForm" ref="palletForm" :rules="palletRules">
         <el-form-item label="托盘码" prop="palletCode">
-          <el-input 
-            v-model="palletForm.palletCode" 
+          <el-input
+            v-model="palletForm.palletCode"
             placeholder="请输入托盘码"
             maxlength="12"
-            show-word-limit>
+            show-word-limit
+          >
           </el-input>
         </el-form-item>
       </el-form>
@@ -191,16 +214,27 @@
           <div class="test-form">
             <el-form :model="testScanForm" label-width="70px" size="small">
               <el-form-item label="托盘码">
-                <el-input v-model="testScanForm.palletCode" placeholder="请输入12位数字托盘码"></el-input>
+                <el-input
+                  v-model="testScanForm.palletCode"
+                  placeholder="请输入12位数字托盘码"
+                ></el-input>
               </el-form-item>
               <el-form-item label="货品名">
-                <el-input v-model="testScanForm.productName" placeholder="请输入货品名称"></el-input>
+                <el-input
+                  v-model="testScanForm.productName"
+                  placeholder="请输入货品名称"
+                ></el-input>
               </el-form-item>
               <el-form-item label="批次号">
-                <el-input v-model="testScanForm.batchNumber" placeholder="请输入批次号"></el-input>
+                <el-input
+                  v-model="testScanForm.batchNumber"
+                  placeholder="请输入批次号"
+                ></el-input>
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" size="small" @click="simulateScan">模拟扫码</el-button>
+                <el-button type="primary" size="small" @click="simulateScan"
+                  >模拟扫码</el-button
+                >
               </el-form-item>
             </el-form>
           </div>
@@ -214,13 +248,20 @@
         <span class="log-title">操作日志</span>
         <div class="log-actions">
           <el-button type="text" size="mini" @click.stop="toggleLogPanel">
-            <i :class="isLogExpanded ? 'el-icon-arrow-down' : 'el-icon-arrow-up'"></i>
+            <i
+              :class="isLogExpanded ? 'el-icon-arrow-down' : 'el-icon-arrow-up'"
+            ></i>
           </el-button>
         </div>
       </div>
       <div class="log-content" ref="logContent" v-show="isLogExpanded">
         <template v-if="logs.length > 0">
-          <div v-for="(log, index) in logs" :key="index" class="log-item" :class="log.type">
+          <div
+            v-for="(log, index) in logs"
+            :key="index"
+            class="log-item"
+            :class="log.type"
+          >
             <span class="log-time">{{ log.time }}</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
@@ -250,7 +291,11 @@ export default {
       palletRules: {
         palletCode: [
           { required: true, message: '请输入托盘码', trigger: 'blur' },
-          { pattern: /^\d{12}$/, message: '托盘码必须为12位数字', trigger: 'blur' }
+          {
+            pattern: /^\d{12}$/,
+            message: '托盘码必须为12位数字',
+            trigger: 'blur'
+          }
         ]
       },
       // 托盘缓存区位置数据
@@ -277,7 +322,7 @@ export default {
       },
       // 添加日志数据
       logs: [],
-      isLogExpanded: false,  // 添加日志面板展开状态
+      isLogExpanded: false // 添加日志面板展开状态
     };
   },
   mounted() {
@@ -292,30 +337,32 @@ export default {
     },
     updateMarkerPositions() {
       const images = document.querySelectorAll('.floor-image');
-      images.forEach(image => {
+      images.forEach((image) => {
         const imageWrapper = image.parentElement;
         if (!imageWrapper) return;
 
-        const markers = imageWrapper.querySelectorAll('.marker, .marker-with-panel, .marker-with-button');
+        const markers = imageWrapper.querySelectorAll(
+          '.marker, .marker-with-panel, .marker-with-button'
+        );
         const imageRect = image.getBoundingClientRect();
         const wrapperRect = imageWrapper.getBoundingClientRect();
-        
+
         // 计算图片的实际显示区域
         const displayedWidth = image.width;
         const displayedHeight = image.height;
         const scaleX = displayedWidth / image.naturalWidth;
         const scaleY = displayedHeight / image.naturalHeight;
-        
+
         // 计算图片在容器中的偏移量
         const imageOffsetX = (wrapperRect.width - displayedWidth) / 2;
         const imageOffsetY = (wrapperRect.height - displayedHeight) / 2;
-        
-        markers.forEach(marker => {
+
+        markers.forEach((marker) => {
           const x = parseFloat(marker.dataset.x);
           const y = parseFloat(marker.dataset.y);
           if (!isNaN(x) && !isNaN(y)) {
-            marker.style.left = `${imageOffsetX + (x * scaleX)}px`;
-            marker.style.top = `${imageOffsetY + (y * scaleY)}px`;
+            marker.style.left = `${imageOffsetX + x * scaleX}px`;
+            marker.style.top = `${imageOffsetY + y * scaleY}px`;
           }
         });
       });
@@ -331,7 +378,7 @@ export default {
     },
     // 获取可用的托盘缓存位置
     getAvailablePalletPosition() {
-      return this.palletStoragePositions.find(pos => !pos.palletCode);
+      return this.palletStoragePositions.find((pos) => !pos.palletCode);
     },
     // 分配托盘到空位置
     assignPalletToPosition(palletCode) {
@@ -344,8 +391,10 @@ export default {
     },
     handlePalletCardClick(position) {
       // 检查是否有可用的空托盘位置
-      const availableEmptyPosition = this.emptyPalletStoragePositions.find(pos => !pos.palletCode);
-      
+      const availableEmptyPosition = this.emptyPalletStoragePositions.find(
+        (pos) => !pos.palletCode
+      );
+
       if (!availableEmptyPosition) {
         this.$message.warning('空托盘区域已满，无法移动');
         this.addLog('error', '空托盘区域已满，无法移动托盘');
@@ -356,15 +405,20 @@ export default {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
-      }).then(() => {
-        // 将托盘移动到空托盘位置
-        availableEmptyPosition.palletCode = position.palletCode;
-        this.addLog('success', `托盘 ${position.palletCode} 从位置 ${position.name} 移动到空托盘区位置 ${availableEmptyPosition.name}`);
-        
-        // 清空原位置
-        position.palletCode = null;
-        this.$message.success('托盘已成功移至空托盘区');
-      }).catch(() => {});
+      })
+        .then(() => {
+          // 将托盘移动到空托盘位置
+          availableEmptyPosition.palletCode = position.palletCode;
+          this.addLog(
+            'success',
+            `托盘 ${position.palletCode} 从位置 ${position.name} 移动到空托盘区位置 ${availableEmptyPosition.name}`
+          );
+
+          // 清空原位置
+          position.palletCode = null;
+          this.$message.success('托盘已成功移至空托盘区');
+        })
+        .catch(() => {});
     },
     handleAddPallet(position) {
       this.selectedPosition = position;
@@ -376,10 +430,12 @@ export default {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
-      }).then(() => {
-        position.palletCode = null;
-        this.$message.success('托盘已移除');
-      }).catch(() => {});
+      })
+        .then(() => {
+          position.palletCode = null;
+          this.$message.success('托盘已移除');
+        })
+        .catch(() => {});
     },
     confirmAddPallet() {
       this.$refs.palletForm.validate((valid) => {
@@ -397,7 +453,11 @@ export default {
       this.testPanelVisible = true;
     },
     simulateScan() {
-      if (!this.testScanForm.palletCode || !this.testScanForm.productName || !this.testScanForm.batchNumber) {
+      if (
+        !this.testScanForm.palletCode ||
+        !this.testScanForm.productName ||
+        !this.testScanForm.batchNumber
+      ) {
         this.$message.warning('请填写完整的扫码信息');
         return;
       }
@@ -410,11 +470,16 @@ export default {
       };
 
       // 添加扫码日志
-      this.addLog('info', `扫码成功：托盘码 ${this.scanInfo.palletCode}，货品 ${this.scanInfo.productName}，批次 ${this.scanInfo.batchNumber}`);
+      this.addLog(
+        'info',
+        `扫码成功：托盘码 ${this.scanInfo.palletCode}，货品 ${this.scanInfo.productName}，批次 ${this.scanInfo.batchNumber}`
+      );
 
       // 查找托盘缓存区的空位
-      const availablePosition = this.palletStoragePositions.find(pos => !pos.palletCode);
-      
+      const availablePosition = this.palletStoragePositions.find(
+        (pos) => !pos.palletCode
+      );
+
       if (!availablePosition) {
         this.$message.error('托盘缓存区已满，无法分配位置');
         this.addLog('error', '托盘缓存区已满，无法分配位置');
@@ -423,7 +488,10 @@ export default {
 
       // 分配托盘到空位置
       availablePosition.palletCode = this.testScanForm.palletCode;
-      this.addLog('success', `托盘已分配到缓存区位置 ${availablePosition.name}`);
+      this.addLog(
+        'success',
+        `托盘已分配到缓存区位置 ${availablePosition.name}`
+      );
 
       // 清空表单
       this.testScanForm = {
@@ -432,7 +500,9 @@ export default {
         batchNumber: ''
       };
 
-      this.$message.success(`扫码成功，托盘已分配到位置 ${availablePosition.name}`);
+      this.$message.success(
+        `扫码成功，托盘已分配到位置 ${availablePosition.name}`
+      );
 
       // 自动打开托盘缓存区抽屉
       this.palletStorageDrawerVisible = true;
@@ -455,7 +525,7 @@ export default {
     // 切换日志面板展开状态
     toggleLogPanel() {
       this.isLogExpanded = !this.isLogExpanded;
-    },
+    }
   }
 };
 </script>
@@ -590,7 +660,11 @@ export default {
   position: absolute;
   width: 100px;
   height: 2px;
-  background: linear-gradient(90deg, rgba(64, 158, 255, 0.8), rgba(64, 158, 255, 0.2));
+  background: linear-gradient(
+    90deg,
+    rgba(64, 158, 255, 0.8),
+    rgba(64, 158, 255, 0.2)
+  );
   transform-origin: left center;
   transition: all 0.3s ease;
 }
@@ -660,13 +734,13 @@ export default {
 /* 始终显示的面板 */
 .data-panel.always-show {
   opacity: 1;
-  pointer-events: auto;  /* 允许面板响应鼠标事件 */
+  pointer-events: auto; /* 允许面板响应鼠标事件 */
 }
 
 /* 悬停时显示面板 */
 .marker-with-panel:hover .data-panel:not(.always-show) {
   opacity: 1;
-  pointer-events: auto;  /* 悬停时也允许面板响应鼠标事件 */
+  pointer-events: auto; /* 悬停时也允许面板响应鼠标事件 */
 }
 
 .data-panel-header {
@@ -740,7 +814,11 @@ export default {
   left: calc(100% + 12px);
   top: 50%;
   transform: translateY(-50%);
-  background: linear-gradient(145deg, rgba(255, 156, 0, 0.9), rgba(255, 126, 0, 0.9));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 156, 0, 0.9),
+    rgba(255, 126, 0, 0.9)
+  );
   border: 1px solid rgba(255, 176, 20, 0.3);
   border-radius: 6px;
   color: white;
@@ -755,7 +833,11 @@ export default {
 }
 
 .marker-with-button .marker-button:hover {
-  background: linear-gradient(145deg, rgba(255, 166, 10, 1), rgba(255, 136, 10, 1));
+  background: linear-gradient(
+    145deg,
+    rgba(255, 166, 10, 1),
+    rgba(255, 136, 10, 1)
+  );
   transform: translateY(-50%) scale(1.05);
   box-shadow: 0 4px 12px rgba(255, 156, 0, 0.3);
 }

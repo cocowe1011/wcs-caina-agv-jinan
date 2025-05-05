@@ -1,5 +1,5 @@
 <template>
-  <div id="app" style="position: fixed;width:100%;height:100%;">
+  <div id="app" style="position: fixed; width: 100%; height: 100%">
     <!-- <nav>
       <router-link to="/">Home</router-link> |
       <router-link to="/about">About</router-link>

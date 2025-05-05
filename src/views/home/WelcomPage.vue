@@ -1,7 +1,7 @@
 <template>
   <div class="welcome">
     <div>
-      <p class="main-left-user center"> {{ userName }} 您好 </p>
+      <p class="main-left-user center">{{ userName }} 您好</p>
       <p class="center main-left-title">欢迎使用WCS系统</p>
       <div class="content">
         <p class="center main-left-content">简单易用 高效稳定</p>
@@ -13,25 +13,22 @@
   </div>
 </template>
 <script>
-import ipcBridge from '@/utils/ipcBridge'
+import ipcBridge from '@/utils/ipcBridge';
 
 export default {
-  name: "WelcomPage",
+  name: 'WelcomPage',
   components: {},
   props: {},
   data() {
     return {
-      userName : ipcBridge.getGlobal('userInfo').userName
+      userName: ipcBridge.getGlobal('userInfo').userName
     };
   },
   watch: {},
   computed: {},
-  methods: {
-  },
-  created() {
-  },
-  mounted() {
-  }
+  methods: {},
+  created() {},
+  mounted() {}
 };
 </script>
 <style lang="less" scoped>
