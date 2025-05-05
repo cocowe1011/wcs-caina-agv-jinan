@@ -48,10 +48,9 @@
         :data-x="arm.x"
         :data-y="arm.y"
       >
-        <div
-          class="pulse pulse-machine"
-          @click="toggleArmPanel(arm.name)"
-        ></div>
+        <span class="arm-label" @click.stop="toggleArmPanel(arm.name)">{{
+          arm.name
+        }}</span>
         <div
           class="data-panel data-panel-mechanical-arm"
           :class="[
@@ -223,62 +222,62 @@ export default {
         {
           name: 'A1',
           x: 1300,
-          y: 410,
+          y: 415,
           status: 0,
           currentPallet: null,
-          position: 'top'
+          position: 'top-left'
         },
         {
           name: 'B1',
           x: 1380,
-          y: 410,
+          y: 415,
           status: 0,
           currentPallet: null,
-          position: 'top'
+          position: 'top-right'
         },
         {
           name: 'C1',
           x: 1220,
-          y: 555,
+          y: 558,
           status: 0,
           currentPallet: null,
           position: 'left'
         },
         {
           name: 'D1',
-          x: 1290,
+          x: 1285,
           y: 625,
           status: 0,
           currentPallet: null,
-          position: 'left'
+          position: 'bottom-left'
         },
         {
           name: 'E1',
-          x: 1365,
-          y: 625,
+          x: 1363,
+          y: 635,
           status: 0,
           currentPallet: null,
-          position: 'right'
+          position: 'bottom-right'
         },
         {
           name: 'A2',
           x: 1300,
-          y: 850,
+          y: 853,
           status: 0,
           currentPallet: null,
-          position: 'left'
+          position: 'top-left'
         },
         {
           name: 'B2',
-          x: 1390,
-          y: 850,
+          x: 1387,
+          y: 858,
           status: 0,
           currentPallet: null,
-          position: 'right'
+          position: 'top-right'
         },
         {
           name: 'C2',
-          x: 1230,
+          x: 1226,
           y: 930,
           status: 0,
           currentPallet: null,
@@ -286,11 +285,11 @@ export default {
         },
         {
           name: 'D2',
-          x: 1230,
+          x: 1226,
           y: 1010,
           status: 0,
           currentPallet: null,
-          position: 'right'
+          position: 'bottom-left'
         },
         {
           name: 'E2',
@@ -500,35 +499,48 @@ export default {
       height: auto;
       object-fit: contain;
     }
-    /* 带数据面板的标识点样式 */
-    .marker-with-panel,
-    .marker-with-panel-machine {
+
+    .marker-with-panel::before {
+      content: '';
       position: absolute;
       width: 10px;
       height: 10px;
+      background: rgba(64, 158, 255, 0.8);
+      border-radius: 50%;
+      animation: glow-blue 2s infinite;
+      top: 50%;
+      left: 50%;
       transform: translate(-50%, -50%);
-      cursor: pointer;
+    }
+
+    @keyframes glow-blue {
+      0% {
+        box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.4);
+      }
+      70% {
+        box-shadow: 0 0 0 8px rgba(64, 158, 255, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
+      }
+    }
+    .marker-with-panel,
+    .marker-with-panel-machine {
+      position: absolute;
+      transform: translate(-50%, -50%);
       z-index: 2;
-      .pulse {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        background: rgba(10, 197, 168, 0.4);
-        border-radius: 50%;
-        animation: pulse 2s infinite;
-      }
-      @keyframes pulse {
-        0% {
-          transform: scale(1);
-          opacity: 1;
-        }
-        100% {
-          transform: scale(2);
-          opacity: 0;
-        }
-      }
-      .pulse-machine {
-        background: rgba(255, 87, 34, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* 添加机械臂标签样式 */
+      .arm-label {
+        color: #ff5722;
+        font-weight: bold;
+        font-size: 16px;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: 3px;
+        cursor: pointer;
       }
       .marker-line {
         position: absolute;
@@ -555,49 +567,6 @@ export default {
         pointer-events: none;
         z-index: 10;
       }
-      .data-panel-mechanical-arm {
-        background: linear-gradient(
-          145deg,
-          rgba(16, 42, 66, 0.95),
-          rgba(8, 72, 107, 0.95)
-        );
-        border: 1px solid rgba(0, 231, 255, 0.2);
-        box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
-          inset 0 0 0 1px rgba(0, 231, 255, 0.05);
-        backdrop-filter: blur(12px);
-        width: 140px;
-        .data-panel-header {
-          color: #00e7ff;
-          border-bottom: 1px solid rgba(0, 231, 255, 0.2);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          pointer-events: auto; /* 确保整个header区域可以响应事件 */
-          span {
-            margin-right: 8px;
-          }
-        }
-        .data-panel-row {
-          color: #e2e8f0;
-          .status-idle {
-            color: #409eff;
-          }
-
-          .status-processing {
-            color: #e6a23c;
-          }
-
-          .status-completed {
-            color: #67c23a;
-          }
-        }
-        .data-panel-label {
-          color: rgba(0, 231, 255, 0.7);
-        }
-      }
       /* 显示面板 */
       .data-panel.show-panel {
         opacity: 1;
@@ -605,57 +574,57 @@ export default {
       }
       /* 面板位置样式 */
       .data-panel.position-right {
-        left: calc(100% + 15px);
+        left: calc(100% + 10px);
         top: 50%;
         transform: translateY(-50%);
       }
 
       .data-panel.position-left {
-        right: calc(100% + 15px);
+        right: calc(100% + 10px);
         top: 50%;
         transform: translateY(-50%);
       }
 
       .data-panel.position-top {
-        bottom: calc(100% + 15px);
+        bottom: calc(100% + 10px);
         left: 50%;
         transform: translateX(-50%);
       }
 
       .data-panel.position-bottom {
-        top: calc(100% + 15px);
+        top: calc(100% + 10px);
         left: 50%;
         transform: translateX(-50%);
       }
 
       .data-panel.position-top-left {
-        bottom: calc(100% + 15px);
-        right: calc(100% + 15px);
+        bottom: calc(100% + 10px);
+        right: calc(100% + 10px);
         transform: none;
       }
 
       .data-panel.position-top-right {
-        bottom: calc(100% + 15px);
-        left: calc(100% + 15px);
+        bottom: calc(100% + 10px);
+        left: calc(100% + 10px);
         transform: none;
       }
 
       .data-panel.position-bottom-left {
-        top: calc(100% + 15px);
-        right: calc(100% + 15px);
+        top: calc(100% + 10px);
+        right: calc(100% + 10px);
         transform: none;
       }
 
       .data-panel.position-bottom-right {
-        top: calc(100% + 15px);
-        left: calc(100% + 15px);
+        top: calc(100% + 10px);
+        left: calc(100% + 10px);
         transform: none;
       }
 
       /* 始终显示的面板 */
       .data-panel.always-show {
         opacity: 1;
-        pointer-events: auto; /* 允许面板响应鼠标事件 */
+        pointer-events: auto;
       }
       .data-panel-header {
         font-size: 14px;
@@ -678,47 +647,56 @@ export default {
           font-size: 12px;
         }
       }
-    }
+      .data-panel-mechanical-arm {
+        background: linear-gradient(
+          145deg,
+          rgba(16, 42, 66, 0.95),
+          rgba(8, 72, 107, 0.95)
+        );
+        border: 1px solid rgba(0, 231, 255, 0.2);
+        box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
+          inset 0 0 0 1px rgba(0, 231, 255, 0.05);
+        backdrop-filter: blur(12px);
+        width: 140px;
+        .data-panel-header {
+          color: #00e7ff;
+          border-bottom: 1px solid rgba(0, 231, 255, 0.2);
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          pointer-events: auto;
+          span {
+            margin-right: 8px;
+          }
+        }
+        .data-panel-row {
+          color: #e2e8f0;
+          .status-idle {
+            color: #409eff;
+          }
 
-    .marker-with-panel::before {
-      content: '';
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: rgba(64, 158, 255, 0.8);
-      border-radius: 50%;
-      animation: glow-blue 2s infinite;
-    }
+          .status-processing {
+            color: #e6a23c;
+          }
 
-    /* 机械臂组件样式 */
-
-    .marker-with-panel-machine::before {
-      content: '';
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: rgba(255, 87, 34, 0.8);
-      border-radius: 50%;
-      animation: glow-machine 2s infinite;
-    }
-
-    @keyframes glow-machine {
-      0% {
-        box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.4);
-      }
-      70% {
-        box-shadow: 0 0 0 5px rgba(255, 87, 34, 0);
-      }
-      100% {
-        box-shadow: 0 0 0 0 rgba(255, 87, 34, 0);
+          .status-completed {
+            color: #67c23a;
+          }
+        }
+        .data-panel-label {
+          color: rgba(0, 231, 255, 0.7);
+        }
       }
     }
 
     /* 带按钮的点位样式 */
     .marker-with-button {
       position: absolute;
-      width: 16px;
-      height: 16px;
+      width: 10px;
+      height: 10px;
       transform: translate(-50%, -50%);
       cursor: pointer;
       z-index: 2;
@@ -773,13 +751,13 @@ export default {
     }
     @keyframes glow {
       0% {
-        box-shadow: 0 0 0 0 rgba(10, 197, 168, 0.4);
+        box-shadow: 0 0 0 0 rgba(255, 156, 0, 0.4);
       }
       70% {
-        box-shadow: 0 0 0 8px rgba(10, 197, 168, 0);
+        box-shadow: 0 0 0 8px rgba(255, 156, 0, 0);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(10, 197, 168, 0);
+        box-shadow: 0 0 0 0 rgba(255, 156, 0, 0);
       }
     }
   }
