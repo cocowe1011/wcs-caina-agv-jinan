@@ -7,20 +7,20 @@
         <div class="pulse"></div>
         <div class="data-panel" :class="['position-bottom', { 'always-show': true }]">
           <div class="data-panel-header">
-            <span>上货扫码信息</span>
+            <span>立库来料</span>
           </div>
           <div class="data-panel-content">
             <div class="data-panel-row">
-              <span class="data-panel-label">当前上货扫码信息：</span>
-              <span>{{ scanInfo.palletCode || '暂无' }}</span>
+              <span class="data-panel-label">当前扫码信息：</span>
+              <span>{{ scanInfo.trayCode || '暂无' }}</span>
             </div>
             <div class="data-panel-row">
-              <span class="data-panel-label">货品名称：</span>
+              <span class="data-panel-label">来料托盘号：</span>
+              <span>{{ scanInfo.trayCode || '暂无' }}</span>
+            </div>
+            <div class="data-panel-row">
+              <span class="data-panel-label">来料名称：</span>
               <span>{{ scanInfo.productName || '暂无' }}</span>
-            </div>
-            <div class="data-panel-row">
-              <span class="data-panel-label">批次号：</span>
-              <span>{{ scanInfo.batchNumber || '暂无' }}</span>
             </div>
           </div>
         </div>
@@ -41,7 +41,9 @@
             class="marker-with-panel-machine" 
             :data-x="arm.x" 
             :data-y="arm.y">
-        <div class="data-panel data-panel-mechanical-arm" :class="[`position-${arm.position}`, { 'always-show': true }]">
+        <div class="pulse pulse-machine" @click="toggleArmPanel(arm.name)"></div>
+        <div class="data-panel data-panel-mechanical-arm" 
+             :class="[`position-${arm.position}`, { 'show-panel': visibleArmPanels.includes(arm.name) }]">
           <div class="data-panel-header">
             <span>机械臂{{ arm.name }}</span>
             <el-button 
@@ -247,13 +249,7 @@
           <div class="test-form">
             <el-form :model="testScanForm" label-width="70px" size="small">
               <el-form-item label="托盘码">
-                <el-input v-model="testScanForm.palletCode" placeholder="请输入12位数字托盘码"></el-input>
-              </el-form-item>
-              <el-form-item label="货品名">
-                <el-input v-model="testScanForm.productName" placeholder="请输入货品名称"></el-input>
-              </el-form-item>
-              <el-form-item label="批次号">
-                <el-input v-model="testScanForm.batchNumber" placeholder="请输入批次号"></el-input>
+                <el-input v-model="testScanForm.palletCode" placeholder="请输入托盘码"></el-input>
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" size="small" @click="simulateScan">模拟扫码</el-button>
@@ -322,11 +318,14 @@
 </template>
 
 <script>
-
+import HttpUtil from '@/utils/HttpUtil';
+import HttpUtilAGV from '@/utils/HttpUtilAGV';
+import moment from 'moment';
 export default {
   name: 'FloorFirst',
   data() {
     return {
+      visibleArmPanels: [], // 当前显示的机械臂面板ID列表
       palletStorageDrawerVisible: false,
       emptyPalletStorageDrawerVisible: false,
       selectArmDialogVisible: false,
@@ -354,81 +353,81 @@ export default {
       })),
       mechanicalArms: [
         { 
-          name: 'B1', 
-          x: 1340, 
-          y: 320, 
+          name: 'A1', 
+          x: 1300, 
+          y: 410, 
           status: 0, 
           currentPallet: null,
           position: 'top'
         },
         { 
-          name: 'B2', 
-          x: 1300, 
-          y: 390, 
+          name: 'B1', 
+          x: 1380, 
+          y: 410, 
           status: 0, 
           currentPallet: null,
-          position: 'left'
-        },
-        { 
-          name: 'B3', 
-          x: 1375, 
-          y: 390, 
-          status: 0, 
-          currentPallet: null,
-          position: 'right'
-        },
-        { 
-          name: 'B4', 
-          x: 1230, 
-          y: 630, 
-          status: 0, 
-          currentPallet: null,
-          position: 'left'
-        },
-        { 
-          name: 'B5', 
-          x: 1350, 
-          y: 630, 
-          status: 0, 
-          currentPallet: null,
-          position: 'right'
+          position: 'top'
         },
         { 
           name: 'C1', 
-          x: 1235, 
-          y: 870, 
+          x: 1220, 
+          y: 555, 
           status: 0, 
           currentPallet: null,
           position: 'left'
+        },
+        { 
+          name: 'D1', 
+          x: 1290, 
+          y: 625, 
+          status: 0, 
+          currentPallet: null,
+          position: 'left'
+        },
+        { 
+          name: 'E1', 
+          x: 1365, 
+          y: 625, 
+          status: 0, 
+          currentPallet: null,
+          position: 'right'
+        },
+        { 
+          name: 'A2', 
+          x: 1300, 
+          y: 850, 
+          status: 0, 
+          currentPallet: null,
+          position: 'left'
+        },
+        { 
+          name: 'B2', 
+          x: 1390, 
+          y: 850, 
+          status: 0, 
+          currentPallet: null,
+          position: 'right'
         },
         { 
           name: 'C2', 
-          x: 1375, 
-          y: 870, 
-          status: 0, 
-          currentPallet: null,
-          position: 'right'
-        },
-        { 
-          name: 'C3', 
-          x: 1235, 
-          y: 1110, 
+          x: 1230, 
+          y: 930, 
           status: 0, 
           currentPallet: null,
           position: 'left'
         },
         { 
-          name: 'C4', 
-          x: 1330, 
-          y: 1110, 
+          name: 'D2', 
+          x: 1230, 
+          y: 1010, 
           status: 0, 
           currentPallet: null,
           position: 'right'
         },
         { 
-          name: 'C5', 
-          x: 1280, 
-          y: 1185, 
+          name: 'E2', 
+          x: 1335, 
+          y: 1100, 
           status: 0, 
           currentPallet: null,
           position: 'bottom'
@@ -446,13 +445,12 @@ export default {
       },
       // 添加上货扫码区域信息
       scanInfo: {
-        palletCode: '',
-        productName: '',
-        batchNumber: ''
+        trayCode: '',
+        productName: ''
       },
       // 添加日志数据
       logs: [],
-      isLogExpanded: false,  // 添加日志面板展开状态
+      isLogExpanded: true,  // 添加日志面板展开状态
     };
   },
   computed: {
@@ -645,45 +643,43 @@ export default {
       this.testPanelVisible = true;
     },
     simulateScan() {
-      if (!this.testScanForm.palletCode || !this.testScanForm.productName || !this.testScanForm.batchNumber) {
+      if (!this.testScanForm.palletCode) {
         this.$message.warning('请填写完整的扫码信息');
         return;
       }
+      // 调用接口读取托盘信息
+      this.getTrayInfo(this.testScanForm.palletCode);
+      // 关闭测试面板
+      this.testPanelVisible = false;  
 
-      // 更新上货扫码区域的信息
-      this.scanInfo = {
-        palletCode: this.testScanForm.palletCode,
-        productName: this.testScanForm.productName,
-        batchNumber: this.testScanForm.batchNumber
-      };
-
+      // 以下逻辑先毙掉-后续对接再放开，先满足现场测试要求
       // 添加扫码日志
-      this.addLog('info', `扫码成功：托盘码 ${this.scanInfo.palletCode}，货品 ${this.scanInfo.productName}，批次 ${this.scanInfo.batchNumber}`);
+      // this.addLog('info', `扫码成功：托盘码 ${this.scanInfo.palletCode}，货品 ${this.scanInfo.productName}，批次 ${this.scanInfo.batchNumber}`);
 
-      // 查找托盘缓存区的空位
-      const availablePosition = this.palletStoragePositions.find(pos => !pos.palletCode);
+      // // 查找托盘缓存区的空位
+      // const availablePosition = this.palletStoragePositions.find(pos => !pos.palletCode);
       
-      if (!availablePosition) {
-        this.$message.error('托盘缓存区已满，无法分配位置');
-        this.addLog('error', '托盘缓存区已满，无法分配位置');
-        return;
-      }
+      // if (!availablePosition) {
+      //   this.$message.error('托盘缓存区已满，无法分配位置');
+      //   this.addLog('error', '托盘缓存区已满，无法分配位置');
+      //   return;
+      // }
 
-      // 分配托盘到空位置
-      availablePosition.palletCode = this.testScanForm.palletCode;
-      this.addLog('success', `托盘已分配到缓存区位置 ${availablePosition.name}`);
+      // // 分配托盘到空位置
+      // availablePosition.palletCode = this.testScanForm.palletCode;
+      // this.addLog('success', `托盘已分配到缓存区位置 ${availablePosition.name}`);
 
-      // 清空表单
-      this.testScanForm = {
-        palletCode: '',
-        productName: '',
-        batchNumber: ''
-      };
+      // // 清空表单
+      // this.testScanForm = {
+      //   palletCode: '',
+      //   productName: '',
+      //   batchNumber: ''
+      // };
 
-      this.$message.success(`扫码成功，托盘已分配到位置 ${availablePosition.name}`);
+      // this.$message.success(`扫码成功，托盘已分配到位置 ${availablePosition.name}`);
 
-      // 自动打开托盘缓存区抽屉
-      this.palletStorageDrawerVisible = true;
+      // // 自动打开托盘缓存区抽屉
+      // this.palletStorageDrawerVisible = true;
     },
     changeArmStatus() {
       if (!this.testArmForm.selectedArm || this.testArmForm.targetStatus === '') {
@@ -720,6 +716,54 @@ export default {
     toggleLogPanel() {
       this.isLogExpanded = !this.isLogExpanded;
     },
+    // 读取托盘信息
+    getTrayInfo(trayCode) {
+      const params = {
+        "traceid": trayCode,
+        "zt": "N",
+        "cheijian":"2800"
+      };
+      HttpUtil.post('/order_info/selectList', params)
+        .then((res) => {
+          // this.queues[0]： 上货区
+          if (res.data && res.data.length > 0) {
+            // 根据托盘信息给agv小车发送指令
+            this.addLog('info',`读取托盘成功：${JSON.stringify(res.data)}`);
+            console.log(res.data[0]);
+            this.scanInfo.trayCode = res.data[0].traceid;
+            this.scanInfo.productName = res.data[0].descrC;
+            // 根据托盘信息给AGV小车发送指令
+          } else {
+            // 没查询到货物信息，直接报警
+            this.addLog('error',`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+          }
+        })
+        .catch((err) => {
+          this.$message.error('查询托盘失败，请重试' + err);
+          // 没查询到货物信息，直接报警
+          this.addLog('error',`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+        });
+    },
+    toggleArmPanel(armName) {
+      const index = this.visibleArmPanels.indexOf(armName);
+      if (index > -1) {
+        // 已显示则隐藏
+        this.visibleArmPanels.splice(index, 1);
+      } else {
+        // 未显示则添加到显示列表
+        this.visibleArmPanels.push(armName);
+      }
+    },
+    // 根据托盘信息给AGV小车发送指令
+    sendAGVCommand(trayInfo) {
+      HttpUtilAGV.post('/agv/sendCommand', trayInfo)
+        .then((res) => {
+          console.log(res);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    }
   }
 };
 </script>
@@ -822,15 +866,15 @@ export default {
     opacity: 1;
   }
   100% {
-    transform: scale(2.5);
+    transform: scale(2);
     opacity: 0;
   }
 }
 /* 带数据面板的标识点样式 */
 .marker-with-panel, .marker-with-panel-machine {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   transform: translate(-50%, -50%);
   cursor: pointer;
   z-index: 2;
@@ -870,6 +914,13 @@ export default {
   opacity: 0;
   transition: all 0.3s ease;
   pointer-events: none;
+  z-index: 10;
+}
+
+/* 显示面板 */
+.data-panel.show-panel {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* 面板位置样式 */
@@ -1427,5 +1478,52 @@ export default {
 
 .floating-log-container .empty-log i {
   font-size: 24px;
+}
+
+/* 机械臂组件样式 */
+.marker-with-panel-machine {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.marker-with-panel-machine::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 87, 34, 0.8);
+  border-radius: 50%;
+  animation: glow-machine 2s infinite;
+}
+
+.pulse-machine {
+  background: rgba(255, 87, 34, 0.4);
+}
+
+@keyframes glow-machine {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(255, 87, 34, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 </style>

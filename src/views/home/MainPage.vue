@@ -74,7 +74,7 @@ export default {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #07293e;
+  background: #d7d7d7;
   padding: 0;
   font-family: 'Roboto', sans-serif;
   overflow: hidden;
