@@ -13,15 +13,14 @@
   </div>
 </template>
 <script>
-import ipcBridge from '@/utils/ipcBridge';
-
+const remote = require('electron').remote;
 export default {
   name: 'WelcomPage',
   components: {},
   props: {},
   data() {
     return {
-      userName: ipcBridge.getGlobal('userInfo').userName
+      userName: remote.getGlobal('sharedObject').userInfo.userName
     };
   },
   watch: {},
