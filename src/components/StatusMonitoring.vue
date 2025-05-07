@@ -25,7 +25,6 @@
 
 <script>
 import { ipcRenderer } from 'electron';
-import { EventBus } from '@/utils/EventBus';
 export default {
   name: 'StatusMonitor',
   components: {},
@@ -128,10 +127,8 @@ export default {
   mounted() {
     // receivedMsg接收到消息发送事件通知
     ipcRenderer.on('receivedMsg', (event, values, values2) => {
-      // this.data = this.PrefixZero(values.DBW70.toString(2), 16)
-      EventBus.$emit('pushPLCMessage', values);
       // 处理看门狗心跳
-      this.watchDog = values.DBW60;
+      this.watchDog = values.DBW0;
       this.sendStr = values2;
       // console.log(this.watchDog)
     });

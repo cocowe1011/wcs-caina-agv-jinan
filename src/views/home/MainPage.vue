@@ -42,22 +42,28 @@ export default {
   data() {
     return {
       currentTime: '',
-      currentFloor: 1
+      currentFloor: 1,
+      timer: null
     };
   },
   computed: {},
   mounted() {
     this.updateTime();
-    setInterval(this.updateTime, 1000);
+    this.timer = setInterval(this.updateTime, 1000);
+  },
+  beforeDestroy() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   },
   methods: {
     updateTime() {
-      this.currentTime = new Date().toLocaleString('zh-CN', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      this.currentTime = `${hours}:${minutes}:${seconds}`;
     },
     switchFloor(floor) {
       this.currentFloor = floor;

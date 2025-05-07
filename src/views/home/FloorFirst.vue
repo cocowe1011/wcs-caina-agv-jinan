@@ -2,10 +2,53 @@
   <div class="content-wrapper">
     <!-- 左侧面板 -->
     <div class="side-info-panel">
+      <!-- 排班计划区域 -->
+      <div class="schedule-section">
+        <div class="section-header">
+          <span><i class="el-icon-date"></i> 今日排班计划</span>
+        </div>
+        <div class="schedule-content">
+          <div
+            class="schedule-item"
+            v-for="(item, index) in scheduleData"
+            :key="index"
+          >
+            <div class="schedule-item-header">
+              <span>{{ item.name }}</span>
+              <div class="schedule-actions">
+                <el-input-number
+                  v-model="item.plan"
+                  :min="0"
+                  :max="999"
+                  size="mini"
+                  controls-position="right"
+                  @change="updateSchedulePlan(index)"
+                ></el-input-number>
+              </div>
+            </div>
+            <div class="schedule-progress">
+              <div class="progress-container">
+                <div class="progress-info">
+                  <span>已完成：{{ item.completed }} / {{ item.plan }}</span>
+                </div>
+                <el-progress
+                  :percentage="
+                    Math.floor((item.completed / (item.plan || 1)) * 100)
+                  "
+                  :stroke-width="8"
+                  :color="getProgressColor(item.completed, item.plan)"
+                  :show-text="true"
+                ></el-progress>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 日志区域 -->
       <div class="log-section">
         <div class="section-header">
-          日志区
+          运行日志
           <div class="log-tabs">
             <div
               class="log-tab"
@@ -38,7 +81,7 @@
                 ]"
                 @click="markAsRead(log)"
               >
-                <div class="log-time">{{ formatTime(log.timestamp) }}</div>
+                <div class="log-time">{{ log.timestamp }}</div>
                 <div class="log-item-content">{{ log.message }}</div>
               </div>
             </template>
@@ -59,9 +102,7 @@
       <div class="floor-container">
         <!-- 左侧区域 -->
         <div class="floor-left">
-          <div class="floor-title">
-            <i class="el-icon-office-building"></i> 操作区
-          </div>
+          <div class="floor-title"><i class="el-icon-monitor"></i> 生产线</div>
           <div class="floor-image-container">
             <div class="image-wrapper">
               <img
@@ -71,7 +112,7 @@
                 @load="updateMarkerPositions"
               />
               <!-- 上货扫码区域提示 -->
-              <div class="marker-with-panel" data-x="230" data-y="200">
+              <div class="marker-with-panel" data-x="260" data-y="200">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
@@ -83,21 +124,21 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">当前扫码信息：</span>
-                      <span>{{ scanInfo.trayCode || '暂无' }}</span>
+                      <span>{{ twoEightHundredPalletCode || '--' }}</span>
                     </div>
                     <div class="data-panel-row">
                       <span class="data-panel-label">来料托盘号：</span>
-                      <span>{{ scanInfo.trayCode || '暂无' }}</span>
+                      <span>{{ scanInfo.trayCode || '--' }}</span>
                     </div>
                     <div class="data-panel-row">
                       <span class="data-panel-label">来料名称：</span>
-                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                      <span>{{ scanInfo.productName || '--' }}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <!-- 三楼灌装线A -->
-              <div class="marker-with-panel" data-x="430" data-y="700">
+              <div class="marker-with-panel" data-x="520" data-y="840">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
@@ -109,13 +150,13 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                      <span>{{ scanInfo.productName || '--' }}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <!-- 三楼灌装线B -->
-              <div class="marker-with-panel" data-x="3080" data-y="850">
+              <div class="marker-with-panel" data-x="2980" data-y="850">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
@@ -127,17 +168,17 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                      <span>{{ scanInfo.productName || '--' }}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <!-- 一楼灌装线A -->
-              <div class="marker-with-panel" data-x="490" data-y="950">
+              <div class="marker-with-panel" data-x="600" data-y="1020">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
-                  :class="['position-left', { 'always-show': true }]"
+                  :class="['position-bottom', { 'always-show': true }]"
                 >
                   <div class="data-panel-header">
                     <span>一楼灌装线A</span>
@@ -145,7 +186,7 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                      <span>{{ scanInfo.productName || '--' }}</span>
                     </div>
                   </div>
                 </div>
@@ -163,13 +204,13 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                      <span>{{ scanInfo.productName || '--' }}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <!-- 添加带按钮的点位示例 -->
-              <div class="marker-with-button" data-x="1050" data-y="60">
+              <div class="marker-with-button" data-x="1020" data-y="60">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -178,7 +219,7 @@
                   拆垛间缓存库位(A1-A100)
                 </button>
               </div>
-              <div class="marker-with-button" data-x="2900" data-y="60">
+              <div class="marker-with-button" data-x="2870" data-y="60">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -187,7 +228,7 @@
                   三楼货物缓存库位(B1-B100)
                 </button>
               </div>
-              <div class="marker-with-button" data-x="1800" data-y="1600">
+              <div class="marker-with-button" data-x="1800" data-y="1605">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -324,10 +365,10 @@
         <div class="test-section">
           <h3>上货扫码模拟</h3>
           <div class="test-form">
-            <el-form :model="testScanForm" label-width="70px" size="small">
+            <el-form label-width="70px" size="small">
               <el-form-item label="托盘码">
                 <el-input
-                  v-model="testScanForm.palletCode"
+                  v-model="twoEightHundredPalletCode"
                   placeholder="请输入托盘码"
                 ></el-input>
               </el-form-item>
@@ -348,6 +389,7 @@
 import HttpUtil from '@/utils/HttpUtil';
 import HttpUtilAGV from '@/utils/HttpUtilAGV';
 import moment from 'moment';
+import { ipcRenderer } from 'electron';
 export default {
   name: 'FloorFirst',
   data() {
@@ -452,18 +494,76 @@ export default {
         }
       ],
       testPanelVisible: false,
-      testScanForm: {
-        palletCode: '',
-        productName: '',
-        batchNumber: ''
-      },
       scanInfo: {
         trayCode: '',
         productName: ''
       },
       activeLogType: 'running',
       runningLogs: [], // 修改为空数组
-      alarmLogs: [] // 修改为空数组
+      alarmLogs: [], // 修改为空数组
+      scheduleData: [
+        { name: '三楼灌装线A', plan: 0, completed: 0 },
+        { name: '三楼灌装线B', plan: 0, completed: 0 },
+        { name: '一楼灌装线A', plan: 0, completed: 0 },
+        { name: '一楼灌装线B', plan: 0, completed: 0 }
+      ],
+      logId: 0, // 添加日志ID计数器
+      // 输送线当前运行状态
+      conveyorStatus: {
+        bit0: '0', // PLC系统运行中运行信号
+        bit1: '0', // PLC系统故障信号
+        bit2: '0', // 1#机器人故障信号
+        bit3: '0', // 2#机器人故障信号
+        bit4: '0', // 去三楼托盘提升机故障信号
+        bit5: '0', // 去一楼托盘提升机故障信号
+        bit6: '0', // 去三楼灌装车间A输送线故障信号
+        bit7: '0', // 去三楼灌装车间B输送线故障信号
+        bit8: '0', // 去一楼灌装车间A输送线故障信号
+        bit9: '0' // 去一楼灌装车间B输送线故障信号
+      },
+      // 1#机器人状态
+      robotStatus: {
+        bit0: '0', // 值为1时，1#机器人A缺货
+        bit1: '0', // 值为1时，1#机器人A需要清理空托盘
+        bit2: '0', // 值为1时，1#机器人B缺货
+        bit3: '0', // 值为1时，1#机器人B需要清理空托盘
+        bit4: '0', // 值为1时，1#机器人C缺货
+        bit5: '0', // 值为1时，1#机器人C需要清理空托盘
+        bit6: '0', // 值为1时，1#机器人D缺货
+        bit7: '0', // 值为1时，1#机器人D需要清理空托盘
+        bit8: '0', // 值为1时，1#机器人E缺货
+        bit9: '0', // 值为1时，1#机器人E需要清理空托盘
+        bit10: '0', // 值为1时，去三楼灌装车间A输送线启动中
+        bit11: '0' // 值为1时，去三楼灌装车间B输送线启动中
+      },
+      // 2#机器人状态
+      robotStatus2: {
+        bit0: '0', // 值为1时，2#机器人A缺货
+        bit1: '0', // 值为1时，2#机器人A需要清理空托盘
+        bit2: '0', // 值为1时，2#机器人B缺货
+        bit3: '0', // 值为1时，2#机器人B需要清理空托盘
+        bit4: '0', // 值为1时，2#机器人C缺货
+        bit5: '0', // 值为1时，2#机器人C需要清理空托盘
+        bit6: '0', // 值为1时，2#机器人D缺货
+        bit7: '0', // 值为1时，2#机器人D需要清理空托盘
+        bit8: '0', // 值为1时，2#机器人E缺货
+        bit9: '0', // 值为1时，2#机器人E需要清理空托盘
+        bit10: '0', // 值为1时，去一楼灌装车间A输送线启动中
+        bit11: '0' // 值为1时，去一楼灌装车间B输送线启动中
+      },
+      // AGV调度条件
+      agvScheduleCondition: {
+        bit0: '0', // 2800转盘处允许接货（同时允许上位机读取扫码结果）
+        bit1: '0', // 2500接驳口允许接货（同时允许上位机读取扫码结果）
+        bit2: '0', // AGV2-2空闲允许放货
+        bit3: '0', // AGV2-3空闲允许放货
+        bit4: '0', // AGV3-1有货需AGV接走（三楼提升机出口）
+        bit5: '0' // AGV1-1有货需AGV接走（一楼提升机出口）
+      },
+      // 2800接货处条码
+      twoEightHundredPalletCode: '',
+      // 2500接货处条码
+      twoFiveHundredPalletCode: ''
     };
   },
   computed: {
@@ -501,6 +601,78 @@ export default {
   },
   mounted() {
     this.initializeMarkers();
+    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
+    //   // 使用位运算优化赋值
+    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+
+    //   // 输送线当前运行状态
+    //   let word2 = this.convertToWord(values.DBW2);
+    //   this.conveyorStatus.bit0 = getBit(word2, 8);
+    //   this.conveyorStatus.bit1 = getBit(word2, 9);
+    //   this.conveyorStatus.bit2 = getBit(word2, 10);
+    //   this.conveyorStatus.bit3 = getBit(word2, 11);
+    //   this.conveyorStatus.bit4 = getBit(word2, 12);
+    //   this.conveyorStatus.bit5 = getBit(word2, 13);
+    //   this.conveyorStatus.bit6 = getBit(word2, 14);
+    //   this.conveyorStatus.bit7 = getBit(word2, 15);
+    //   this.conveyorStatus.bit8 = getBit(word2, 0);
+    //   this.conveyorStatus.bit9 = getBit(word2, 1);
+
+    //   // 1#机器人状态
+    //   let word4 = this.convertToWord(values.DBW4);
+    //   this.robotStatus.bit0 = getBit(word4, 8);
+    //   this.robotStatus.bit1 = getBit(word4, 9);
+    //   this.robotStatus.bit2 = getBit(word4, 10);
+    //   this.robotStatus.bit3 = getBit(word4, 11);
+    //   this.robotStatus.bit4 = getBit(word4, 12);
+    //   this.robotStatus.bit5 = getBit(word4, 13);
+    //   this.robotStatus.bit6 = getBit(word4, 14);
+    //   this.robotStatus.bit7 = getBit(word4, 15);
+    //   this.robotStatus.bit8 = getBit(word4, 0);
+    //   this.robotStatus.bit9 = getBit(word4, 1);
+    //   this.robotStatus.bit10 = getBit(word4, 2);
+    //   this.robotStatus.bit11 = getBit(word4, 3);
+
+    //   // 2#机器人状态
+    //   let word6 = this.convertToWord(values.DBW6);
+    //   this.robotStatus2.bit0 = getBit(word6, 8);
+    //   this.robotStatus2.bit1 = getBit(word6, 9);
+    //   this.robotStatus2.bit2 = getBit(word6, 10);
+    //   this.robotStatus2.bit3 = getBit(word6, 11);
+    //   this.robotStatus2.bit4 = getBit(word6, 12);
+    //   this.robotStatus2.bit5 = getBit(word6, 13);
+    //   this.robotStatus2.bit6 = getBit(word6, 14);
+    //   this.robotStatus2.bit7 = getBit(word6, 15);
+    //   this.robotStatus2.bit8 = getBit(word6, 0);
+    //   this.robotStatus2.bit9 = getBit(word6, 1);
+    //   this.robotStatus2.bit10 = getBit(word6, 2);
+    //   this.robotStatus2.bit11 = getBit(word6, 3);
+
+    //   // AGV调度条件
+    //   let word8 = this.convertToWord(values.DBW8);
+    //   this.agvScheduleCondition.bit0 = getBit(word8, 8);
+    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
+    //   this.agvScheduleCondition.bit2 = getBit(word8, 10);
+    //   this.agvScheduleCondition.bit3 = getBit(word8, 11);
+    //   this.agvScheduleCondition.bit4 = getBit(word8, 12);
+    //   this.agvScheduleCondition.bit5 = getBit(word8, 13);
+
+    //   // 2800接货处条码
+    //   this.twoEightHundredPalletCode = values.DBB10 ?? '';
+    //   // 2500接货处条码
+    //   this.twoFiveHundredPalletCode = values.DBB20 ?? '';
+    // });
+  },
+  watch: {
+    // 2800接货处条码
+    twoEightHundredPalletCode: {
+      async handler(newVal) {
+        if (newVal !== '' && this.agvScheduleCondition.bit0 === '1') {
+          this.addLog(`2800接货处扫码数据：${newVal}`);
+          this.getTrayInfo(this.twoEightHundredPalletCode);
+        }
+      }
+    }
   },
   methods: {
     getStatusText(status) {
@@ -570,12 +742,12 @@ export default {
       this.testPanelVisible = true;
     },
     simulateScan() {
-      if (!this.testScanForm.palletCode) {
+      if (!this.twoEightHundredPalletCode) {
         this.$message.warning('请填写完整的扫码信息');
         return;
       }
       // 调用接口读取托盘信息
-      this.getTrayInfo(this.testScanForm.palletCode);
+      this.getTrayInfo(this.twoEightHundredPalletCode);
       // 关闭测试面板
       this.testPanelVisible = false;
     },
@@ -591,7 +763,6 @@ export default {
           if (res.data && res.data.length > 0) {
             // 根据托盘信息给agv小车发送指令
             this.addLog(`读取托盘成功：${JSON.stringify(res.data)}`);
-            console.log(res.data[0]);
             this.scanInfo.trayCode = res.data[0].traceid;
             this.scanInfo.productName = res.data[0].descrC;
             // 根据托盘信息给AGV小车发送指令
@@ -625,7 +796,7 @@ export default {
         id: this.logId++,
         type,
         message,
-        timestamp: new Date().getTime(),
+        timestamp: moment().format('YYYY-MM-DD HH:mm:ss'),
         unread: type === 'alarm'
       };
 
@@ -640,6 +811,27 @@ export default {
         if (this.alarmLogs.length > 100) {
           this.alarmLogs.pop();
         }
+      }
+    },
+    updateSchedulePlan(index) {
+      // 更新排班计划
+      this.addLog(
+        `已更新${this.scheduleData[index].name}的计划数量为${this.scheduleData[index].plan}`
+      );
+      // 这里可以添加将计划保存到后端的逻辑
+    },
+    getProgressColor(completed, plan) {
+      // 根据完成度计算进度条颜色
+      const percentage = plan === 0 ? 0 : (completed / plan) * 100;
+      if (percentage < 30) return '#909399'; // 灰色
+      if (percentage < 70) return '#e6a23c'; // 黄色
+      return '#67c23a'; // 绿色
+    },
+    convertToWord(value) {
+      if (value < 0) {
+        return (value & 0xffff) >>> 0; // 负数转换为无符号的16位整数
+      } else {
+        return value; // 非负数保持不变
       }
     }
   }
@@ -658,11 +850,107 @@ export default {
     width: 330px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 2px 8px 8px 8px;
+    gap: 7px;
+    padding: 0px 7px 7px 7px;
     box-sizing: border-box;
     flex-shrink: 0;
     overflow: hidden;
+    .schedule-section {
+      background: #07293e;
+      padding: 10px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+      height: 338px;
+      display: flex;
+      flex-direction: column;
+
+      :deep(.el-input-number) {
+        width: 100px;
+      }
+
+      :deep(.el-input-number .el-input__inner) {
+        background: rgba(10, 197, 168, 0.1);
+        border: 1px solid rgba(10, 197, 168, 0.3);
+        color: #fff;
+      }
+
+      :deep(.el-progress-bar__outer) {
+        background-color: rgba(255, 255, 255, 0.2) !important;
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0px 0px 8px 0px;
+        color: #0ac5a8;
+        font-size: 22px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .schedule-content {
+        flex: 1;
+        padding: 5px 0 5px 0;
+        .schedule-item {
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 4px;
+          padding: 8px;
+          margin-bottom: 6px;
+          width: 100%;
+          box-sizing: border-box;
+          .schedule-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+          }
+          .schedule-progress {
+            margin-top: 6px;
+            .progress-container {
+              display: flex;
+              align-items: center;
+            }
+            .progress-info {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-right: 10px;
+              color: rgba(255, 255, 255, 0.6);
+              font-size: 12px;
+              min-width: 105px;
+            }
+            :deep(.el-progress) {
+              flex: 1;
+            }
+            :deep(.el-progress__text) {
+              color: rgba(255, 255, 255, 0.6);
+              font-size: 12px !important;
+            }
+          }
+        }
+      }
+      .schedule-content::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .schedule-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .schedule-content::-webkit-scrollbar-thumb {
+        background: rgba(10, 197, 168, 0.2);
+        border-radius: 2px;
+      }
+
+      .schedule-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(10, 197, 168, 0.4);
+      }
+    }
+
+    /* 日志区域 */
     .log-section {
       background: #07293e;
       padding: 10px;
@@ -816,7 +1104,7 @@ export default {
   .main-content {
     flex: 1;
     display: flex;
-    padding: 2px 8px 8px 0px;
+    padding: 0px 7px 7px 0px;
     box-sizing: border-box;
     overflow: hidden;
     height: 100%;
@@ -934,7 +1222,7 @@ export default {
                 border: 1px solid rgba(64, 158, 255, 0.3);
                 border-radius: 8px;
                 padding: 12px;
-                width: 200px;
+                width: 160px;
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
                 opacity: 0;
                 transition: all 0.3s ease;
