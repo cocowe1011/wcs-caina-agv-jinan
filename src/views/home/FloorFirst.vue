@@ -33,11 +33,95 @@
           </div>
         </div>
       </div>
-      <!-- 添加带按钮的点位示例 -->
-      <div class="marker-with-button" data-x="1820" data-y="1050">
+      <!-- 三楼灌装线A -->
+      <div class="marker-with-panel" data-x="430" data-y="700">
         <div class="pulse"></div>
-        <button class="marker-button" @click="handlePalletStorageClick">
-          托盘缓存区操作
+        <div
+          class="data-panel"
+          :class="['position-left', { 'always-show': true }]"
+        >
+          <div class="data-panel-header">
+            <span>三楼灌装线A</span>
+          </div>
+          <div class="data-panel-content">
+            <div class="data-panel-row">
+              <span class="data-panel-label">产品名称：</span>
+              <span>{{ scanInfo.productName || '暂无' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 三楼灌装线B -->
+      <div class="marker-with-panel" data-x="3080" data-y="850">
+        <div class="pulse"></div>
+        <div
+          class="data-panel"
+          :class="['position-right', { 'always-show': true }]"
+        >
+          <div class="data-panel-header">
+            <span>三楼灌装线B</span>
+          </div>
+          <div class="data-panel-content">
+            <div class="data-panel-row">
+              <span class="data-panel-label">产品名称：</span>
+              <span>{{ scanInfo.productName || '暂无' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 一楼灌装线A -->
+      <div class="marker-with-panel" data-x="490" data-y="950">
+        <div class="pulse"></div>
+        <div
+          class="data-panel"
+          :class="['position-left', { 'always-show': true }]"
+        >
+          <div class="data-panel-header">
+            <span>一楼灌装线A</span>
+          </div>
+          <div class="data-panel-content">
+            <div class="data-panel-row">
+              <span class="data-panel-label">产品名称：</span>
+              <span>{{ scanInfo.productName || '暂无' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 一楼灌装线B -->
+      <div class="marker-with-panel" data-x="2900" data-y="1020">
+        <div class="pulse"></div>
+        <div
+          class="data-panel"
+          :class="['position-bottom', { 'always-show': true }]"
+        >
+          <div class="data-panel-header">
+            <span>一楼灌装线B</span>
+          </div>
+          <div class="data-panel-content">
+            <div class="data-panel-row">
+              <span class="data-panel-label">产品名称：</span>
+              <span>{{ scanInfo.productName || '暂无' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 添加带按钮的点位示例 -->
+      <div class="marker-with-button" data-x="1050" data-y="60">
+        <div class="pulse"></div>
+        <button class="marker-button" @click="handlePalletStorageClick('A')">
+          拆垛间缓存库位(A1-A100)
+        </button>
+      </div>
+      <div class="marker-with-button" data-x="2900" data-y="60">
+        <div class="pulse"></div>
+        <button class="marker-button" @click="handlePalletStorageClick('B')">
+          三楼货物缓存库位(B1-B100)
+        </button>
+      </div>
+      <div class="marker-with-button" data-x="1800" data-y="1600">
+        <div class="pulse"></div>
+        <button class="marker-button" @click="handlePalletStorageClick('C')">
+          一楼货物缓存库位(C1-C100)
         </button>
       </div>
       <!-- 机械臂 -->
@@ -84,7 +168,7 @@
 
     <!-- 托盘缓存区抽屉 -->
     <el-drawer
-      title="托盘缓存区"
+      :title="`托盘缓存区 ${currentStorageArea}区`"
       :visible.sync="palletStorageDrawerVisible"
       direction="rtl"
       size="400px"
@@ -92,8 +176,19 @@
       custom-class="storage-drawer"
     >
       <div class="storage-container">
+        <div class="area-tabs">
+          <div
+            v-for="area in ['A', 'B', 'C']"
+            :key="area"
+            class="area-tab"
+            :class="{ active: currentStorageArea === area }"
+            @click="switchStorageArea(area)"
+          >
+            {{ area }}区
+          </div>
+        </div>
         <div
-          v-for="(position, index) in palletStoragePositions"
+          v-for="(position, index) in currentStoragePositions"
           :key="index"
           class="storage-card"
           :class="{ 'can-move': position.palletCode }"
@@ -214,10 +309,21 @@ export default {
     return {
       visibleArmPanels: [], // 当前显示的机械臂面板ID列表
       palletStorageDrawerVisible: false,
-      palletStoragePositions: Array.from({ length: 10 }, (_, i) => ({
-        name: `P${i + 1}`,
-        palletCode: null
-      })),
+      currentStorageArea: 'A', // 当前选中的缓存区
+      palletStorageAreas: {
+        A: Array.from({ length: 100 }, (_, i) => ({
+          name: `A${i + 1}`,
+          palletCode: null
+        })),
+        B: Array.from({ length: 100 }, (_, i) => ({
+          name: `B${i + 1}`,
+          palletCode: null
+        })),
+        C: Array.from({ length: 100 }, (_, i) => ({
+          name: `C${i + 1}`,
+          palletCode: null
+        }))
+      },
       mechanicalArms: [
         {
           name: 'A1',
@@ -334,6 +440,9 @@ export default {
         };
         return statusIcons[status];
       };
+    },
+    currentStoragePositions() {
+      return this.palletStorageAreas[this.currentStorageArea] || [];
     }
   },
   mounted() {
@@ -387,7 +496,8 @@ export default {
     beforeDestroy() {
       window.removeEventListener('resize', this.updateMarkerPositions);
     },
-    handlePalletStorageClick() {
+    handlePalletStorageClick(area) {
+      this.currentStorageArea = area;
       this.palletStorageDrawerVisible = true;
     },
     handleRemovePallet(position) {
@@ -471,6 +581,9 @@ export default {
     },
     toggleLogPanel() {
       this.isLogExpanded = !this.isLogExpanded;
+    },
+    switchStorageArea(area) {
+      this.currentStorageArea = area;
     }
   }
 };
@@ -856,6 +969,36 @@ export default {
     padding: 20px;
     height: 100%;
     overflow-y: auto;
+
+    .area-tabs {
+      display: flex;
+      margin-bottom: 20px;
+      background: rgba(30, 42, 56, 0.5);
+      border-radius: 8px;
+      overflow: hidden;
+
+      .area-tab {
+        flex: 1;
+        text-align: center;
+        padding: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 500;
+
+        &:hover {
+          background: rgba(64, 158, 255, 0.1);
+          color: rgba(255, 255, 255, 0.9);
+        }
+
+        &.active {
+          background: rgba(64, 158, 255, 0.2);
+          color: #409eff;
+          box-shadow: inset 0 -2px 0 #409eff;
+        }
+      }
+    }
+
     .storage-card {
       background: rgba(30, 42, 56, 0.95);
       border: 1px solid rgba(64, 158, 255, 0.3);
