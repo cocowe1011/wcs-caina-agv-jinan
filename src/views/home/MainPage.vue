@@ -74,7 +74,7 @@ export default {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #d7d7d7;
+  background: radial-gradient(circle, #83b3de, #ffffff);
   padding: 0;
   font-family: 'Roboto', sans-serif;
   overflow: hidden;
@@ -83,7 +83,6 @@ export default {
 
 .floor-left {
   flex: 1;
-  padding: 10px;
   color: #f5f5f5;
   display: flex;
   flex-direction: column;

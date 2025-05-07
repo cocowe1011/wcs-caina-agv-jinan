@@ -1,169 +1,247 @@
 <template>
-  <div class="floor-image-container">
-    <div class="image-wrapper">
-      <img
-        src="@/assets/jinan-agv/2800-2F.png"
-        alt="一楼平面图"
-        class="floor-image"
-        @load="updateMarkerPositions"
-      />
-      <!-- 上货扫码区域提示 -->
-      <div class="marker-with-panel" data-x="230" data-y="200">
-        <div class="pulse"></div>
-        <div
-          class="data-panel"
-          :class="['position-bottom', { 'always-show': true }]"
-        >
-          <div class="data-panel-header">
-            <span>立库来料</span>
+  <div class="content-wrapper">
+    <!-- 左侧面板 -->
+    <div class="side-info-panel">
+      <!-- 日志区域 -->
+      <div class="log-section">
+        <div class="section-header">
+          日志区
+          <div class="log-tabs">
+            <div
+              class="log-tab"
+              :class="{ active: activeLogType === 'running' }"
+              @click="activeLogType = 'running'"
+            >
+              运行日志
+            </div>
+            <div
+              class="log-tab"
+              :class="{ active: activeLogType === 'alarm' }"
+              @click="activeLogType = 'alarm'"
+            >
+              报警日志
+              <div v-if="unreadAlarms > 0" class="alarm-badge">
+                {{ unreadAlarms }}
+              </div>
+            </div>
           </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">当前扫码信息：</span>
-              <span>{{ scanInfo.trayCode || '暂无' }}</span>
-            </div>
-            <div class="data-panel-row">
-              <span class="data-panel-label">来料托盘号：</span>
-              <span>{{ scanInfo.trayCode || '暂无' }}</span>
-            </div>
-            <div class="data-panel-row">
-              <span class="data-panel-label">来料名称：</span>
-              <span>{{ scanInfo.productName || '暂无' }}</span>
+        </div>
+        <div class="scrollable-content">
+          <div class="log-list">
+            <template v-if="currentLogs.length > 0">
+              <div
+                v-for="log in currentLogs"
+                :key="log.id"
+                :class="[
+                  'log-item',
+                  { alarm: log.type === 'alarm', unread: log.unread }
+                ]"
+                @click="markAsRead(log)"
+              >
+                <div class="log-time">{{ formatTime(log.timestamp) }}</div>
+                <div class="log-item-content">{{ log.message }}</div>
+              </div>
+            </template>
+            <div v-else class="empty-state">
+              <i class="el-icon-chat-line-square"></i>
+              <p>
+                {{
+                  activeLogType === 'running' ? '暂无运行日志' : '暂无报警日志'
+                }}
+              </p>
             </div>
           </div>
         </div>
       </div>
-      <!-- 三楼灌装线A -->
-      <div class="marker-with-panel" data-x="430" data-y="700">
-        <div class="pulse"></div>
-        <div
-          class="data-panel"
-          :class="['position-left', { 'always-show': true }]"
-        >
-          <div class="data-panel-header">
-            <span>三楼灌装线A</span>
+    </div>
+    <!-- 右侧内容区域 -->
+    <div class="main-content">
+      <div class="floor-container">
+        <!-- 左侧区域 -->
+        <div class="floor-left">
+          <div class="floor-title">
+            <i class="el-icon-office-building"></i> 操作区
           </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">产品名称：</span>
-              <span>{{ scanInfo.productName || '暂无' }}</span>
+          <div class="floor-image-container">
+            <div class="image-wrapper">
+              <img
+                src="@/assets/jinan-agv/2800-2F.png"
+                alt="一楼平面图"
+                class="floor-image"
+                @load="updateMarkerPositions"
+              />
+              <!-- 上货扫码区域提示 -->
+              <div class="marker-with-panel" data-x="230" data-y="200">
+                <div class="pulse"></div>
+                <div
+                  class="data-panel"
+                  :class="['position-bottom', { 'always-show': true }]"
+                >
+                  <div class="data-panel-header">
+                    <span>立库来料</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">当前扫码信息：</span>
+                      <span>{{ scanInfo.trayCode || '暂无' }}</span>
+                    </div>
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">来料托盘号：</span>
+                      <span>{{ scanInfo.trayCode || '暂无' }}</span>
+                    </div>
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">来料名称：</span>
+                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 三楼灌装线A -->
+              <div class="marker-with-panel" data-x="430" data-y="700">
+                <div class="pulse"></div>
+                <div
+                  class="data-panel"
+                  :class="['position-left', { 'always-show': true }]"
+                >
+                  <div class="data-panel-header">
+                    <span>三楼灌装线A</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">产品名称：</span>
+                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 三楼灌装线B -->
+              <div class="marker-with-panel" data-x="3080" data-y="850">
+                <div class="pulse"></div>
+                <div
+                  class="data-panel"
+                  :class="['position-right', { 'always-show': true }]"
+                >
+                  <div class="data-panel-header">
+                    <span>三楼灌装线B</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">产品名称：</span>
+                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 一楼灌装线A -->
+              <div class="marker-with-panel" data-x="490" data-y="950">
+                <div class="pulse"></div>
+                <div
+                  class="data-panel"
+                  :class="['position-left', { 'always-show': true }]"
+                >
+                  <div class="data-panel-header">
+                    <span>一楼灌装线A</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">产品名称：</span>
+                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 一楼灌装线B -->
+              <div class="marker-with-panel" data-x="2900" data-y="1020">
+                <div class="pulse"></div>
+                <div
+                  class="data-panel"
+                  :class="['position-bottom', { 'always-show': true }]"
+                >
+                  <div class="data-panel-header">
+                    <span>一楼灌装线B</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">产品名称：</span>
+                      <span>{{ scanInfo.productName || '暂无' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 添加带按钮的点位示例 -->
+              <div class="marker-with-button" data-x="1050" data-y="60">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('A')"
+                >
+                  拆垛间缓存库位(A1-A100)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="2900" data-y="60">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('B')"
+                >
+                  三楼货物缓存库位(B1-B100)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="1800" data-y="1600">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('C')"
+                >
+                  一楼货物缓存库位(C1-C100)
+                </button>
+              </div>
+              <!-- 机械臂 -->
+              <div
+                v-for="arm in mechanicalArms"
+                :key="arm.name"
+                class="marker-with-panel-machine"
+                :data-x="arm.x"
+                :data-y="arm.y"
+              >
+                <span
+                  class="arm-label"
+                  @click.stop="toggleArmPanel(arm.name)"
+                  >{{ arm.name }}</span
+                >
+                <div
+                  class="data-panel data-panel-mechanical-arm"
+                  :class="[
+                    `position-${arm.position}`,
+                    { 'show-panel': visibleArmPanels.includes(arm.name) }
+                  ]"
+                >
+                  <div class="data-panel-header">
+                    <span>机械臂{{ arm.name }}</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">托盘码：</span>
+                      <span>{{ arm.currentPallet || '暂无' }}</span>
+                    </div>
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">状态：</span>
+                      <span :class="getStatusClass(arm.status)">
+                        <i
+                          :class="getStatusIcon(arm.status)"
+                          style="margin-right: 2px"
+                        ></i>
+                        {{ getStatusText(arm.status) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 机械臂 -->
             </div>
           </div>
         </div>
       </div>
-      <!-- 三楼灌装线B -->
-      <div class="marker-with-panel" data-x="3080" data-y="850">
-        <div class="pulse"></div>
-        <div
-          class="data-panel"
-          :class="['position-right', { 'always-show': true }]"
-        >
-          <div class="data-panel-header">
-            <span>三楼灌装线B</span>
-          </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">产品名称：</span>
-              <span>{{ scanInfo.productName || '暂无' }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 一楼灌装线A -->
-      <div class="marker-with-panel" data-x="490" data-y="950">
-        <div class="pulse"></div>
-        <div
-          class="data-panel"
-          :class="['position-left', { 'always-show': true }]"
-        >
-          <div class="data-panel-header">
-            <span>一楼灌装线A</span>
-          </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">产品名称：</span>
-              <span>{{ scanInfo.productName || '暂无' }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 一楼灌装线B -->
-      <div class="marker-with-panel" data-x="2900" data-y="1020">
-        <div class="pulse"></div>
-        <div
-          class="data-panel"
-          :class="['position-bottom', { 'always-show': true }]"
-        >
-          <div class="data-panel-header">
-            <span>一楼灌装线B</span>
-          </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">产品名称：</span>
-              <span>{{ scanInfo.productName || '暂无' }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 添加带按钮的点位示例 -->
-      <div class="marker-with-button" data-x="1050" data-y="60">
-        <div class="pulse"></div>
-        <button class="marker-button" @click="handlePalletStorageClick('A')">
-          拆垛间缓存库位(A1-A100)
-        </button>
-      </div>
-      <div class="marker-with-button" data-x="2900" data-y="60">
-        <div class="pulse"></div>
-        <button class="marker-button" @click="handlePalletStorageClick('B')">
-          三楼货物缓存库位(B1-B100)
-        </button>
-      </div>
-      <div class="marker-with-button" data-x="1800" data-y="1600">
-        <div class="pulse"></div>
-        <button class="marker-button" @click="handlePalletStorageClick('C')">
-          一楼货物缓存库位(C1-C100)
-        </button>
-      </div>
-      <!-- 机械臂 -->
-      <div
-        v-for="arm in mechanicalArms"
-        :key="arm.name"
-        class="marker-with-panel-machine"
-        :data-x="arm.x"
-        :data-y="arm.y"
-      >
-        <span class="arm-label" @click.stop="toggleArmPanel(arm.name)">{{
-          arm.name
-        }}</span>
-        <div
-          class="data-panel data-panel-mechanical-arm"
-          :class="[
-            `position-${arm.position}`,
-            { 'show-panel': visibleArmPanels.includes(arm.name) }
-          ]"
-        >
-          <div class="data-panel-header">
-            <span>机械臂{{ arm.name }}</span>
-          </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">托盘码：</span>
-              <span>{{ arm.currentPallet || '暂无' }}</span>
-            </div>
-            <div class="data-panel-row">
-              <span class="data-panel-label">状态：</span>
-              <span :class="getStatusClass(arm.status)">
-                <i
-                  :class="getStatusIcon(arm.status)"
-                  style="margin-right: 2px"
-                ></i>
-                {{ getStatusText(arm.status) }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 机械臂 -->
     </div>
 
     <!-- 托盘缓存区抽屉 -->
@@ -263,39 +341,6 @@
         </div>
       </div>
     </el-dialog>
-
-    <!-- 添加悬浮日志面板 -->
-    <div class="floating-log-container">
-      <div class="log-header" @click="toggleLogPanel">
-        <span class="log-title">操作日志</span>
-        <div class="log-actions">
-          <el-button type="text" size="mini" @click.stop="toggleLogPanel">
-            <i
-              :class="isLogExpanded ? 'el-icon-arrow-down' : 'el-icon-arrow-up'"
-            ></i>
-          </el-button>
-        </div>
-      </div>
-      <div class="log-content" ref="logContent" v-show="isLogExpanded">
-        <template v-if="logs.length > 0">
-          <div
-            v-for="(log, index) in logs"
-            :key="index"
-            class="log-item"
-            :class="log.type"
-          >
-            <span class="log-time">{{ log.time }}</span>
-            <span class="log-message">{{ log.message }}</span>
-          </div>
-        </template>
-        <template v-else>
-          <div class="empty-log">
-            <i class="el-icon-document"></i>
-            <span>暂无日志</span>
-          </div>
-        </template>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -416,8 +461,9 @@ export default {
         trayCode: '',
         productName: ''
       },
-      logs: [],
-      isLogExpanded: true // 添加日志面板展开状态
+      activeLogType: 'running',
+      runningLogs: [], // 修改为空数组
+      alarmLogs: [] // 修改为空数组
     };
   },
   computed: {
@@ -443,6 +489,14 @@ export default {
     },
     currentStoragePositions() {
       return this.palletStorageAreas[this.currentStorageArea] || [];
+    },
+    currentLogs() {
+      return this.activeLogType === 'running'
+        ? this.runningLogs
+        : this.alarmLogs;
+    },
+    unreadAlarms() {
+      return this.alarmLogs.filter((log) => log.unread).length;
     }
   },
   mounted() {
@@ -536,23 +590,20 @@ export default {
           // this.queues[0]： 上货区
           if (res.data && res.data.length > 0) {
             // 根据托盘信息给agv小车发送指令
-            this.addLog('info', `读取托盘成功：${JSON.stringify(res.data)}`);
+            this.addLog(`读取托盘成功：${JSON.stringify(res.data)}`);
             console.log(res.data[0]);
             this.scanInfo.trayCode = res.data[0].traceid;
             this.scanInfo.productName = res.data[0].descrC;
             // 根据托盘信息给AGV小车发送指令
           } else {
             // 没查询到货物信息，直接报警
-            this.addLog(
-              'error',
-              `读取托盘失败：${trayCode}，请检查托盘是否存在`
-            );
+            this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
           }
         })
         .catch((err) => {
           this.$message.error('查询托盘失败，请重试' + err);
           // 没查询到货物信息，直接报警
-          this.addLog('error', `读取托盘失败：${trayCode}，请检查托盘是否存在`);
+          this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
         });
     },
     toggleArmPanel(armName) {
@@ -565,402 +616,526 @@ export default {
         this.visibleArmPanels.push(armName);
       }
     },
-    addLog(type, message) {
-      const time = new Date().toLocaleTimeString();
-      this.logs.push({ time, type, message });
-      // 保持最新的100条日志
-      if (this.logs.length > 100) {
-        this.logs.shift();
-      }
-      // 滚动到最新日志
-      this.$nextTick(() => {
-        if (this.$refs.logContent) {
-          this.$refs.logContent.scrollTop = this.$refs.logContent.scrollHeight;
-        }
-      });
-    },
-    toggleLogPanel() {
-      this.isLogExpanded = !this.isLogExpanded;
-    },
     switchStorageArea(area) {
       this.currentStorageArea = area;
+    },
+    // 添加新的日志方法
+    addLog(message, type = 'running') {
+      const log = {
+        id: this.logId++,
+        type,
+        message,
+        timestamp: new Date().getTime(),
+        unread: type === 'alarm'
+      };
+
+      if (type === 'running') {
+        this.runningLogs.unshift(log);
+        // 保持日志数量在合理范围内
+        if (this.runningLogs.length > 100) {
+          this.runningLogs.pop();
+        }
+      } else {
+        this.alarmLogs.unshift(log);
+        if (this.alarmLogs.length > 100) {
+          this.alarmLogs.pop();
+        }
+      }
     }
   }
 };
 </script>
 
 <style scoped lang="less">
-.floor-image-container {
-  height: 100%;
+.content-wrapper {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 0;
-  position: relative;
-  .image-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  .side-info-panel {
+    width: 330px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    .floor-image {
-      display: block;
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
-      height: auto;
-      object-fit: contain;
-    }
-
-    .marker-with-panel::before {
-      content: '';
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      background: rgba(64, 158, 255, 0.8);
-      border-radius: 50%;
-      animation: glow-blue 2s infinite;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-    }
-
-    @keyframes glow-blue {
-      0% {
-        box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.4);
-      }
-      70% {
-        box-shadow: 0 0 0 8px rgba(64, 158, 255, 0);
-      }
-      100% {
-        box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
-      }
-    }
-    .marker-with-panel,
-    .marker-with-panel-machine {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      z-index: 2;
+    flex-direction: column;
+    gap: 10px;
+    padding: 2px 8px 8px 8px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    overflow: hidden;
+    .log-section {
+      background: #07293e;
+      padding: 10px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+      height: 257px;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      /* 添加机械臂标签样式 */
-      .arm-label {
-        color: #ff5722;
-        font-weight: bold;
-        font-size: 16px;
-        line-height: 1;
-        padding: 2px 4px;
-        border-radius: 3px;
-        cursor: pointer;
-      }
-      .marker-line {
-        position: absolute;
-        width: 100px;
-        height: 2px;
-        background: linear-gradient(
-          90deg,
-          rgba(64, 158, 255, 0.8),
-          rgba(64, 158, 255, 0.2)
-        );
-        transform-origin: left center;
-        transition: all 0.3s ease;
-      }
-      .data-panel {
-        position: absolute;
-        background: rgba(30, 42, 56, 0.95);
-        border: 1px solid rgba(64, 158, 255, 0.3);
-        border-radius: 8px;
-        padding: 12px;
-        width: 200px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        opacity: 0;
-        transition: all 0.3s ease;
-        pointer-events: none;
-        z-index: 10;
-      }
-      /* 显示面板 */
-      .data-panel.show-panel {
-        opacity: 1;
-        pointer-events: auto;
-      }
-      /* 面板位置样式 */
-      .data-panel.position-right {
-        left: calc(100% + 10px);
-        top: 50%;
-        transform: translateY(-50%);
-      }
-
-      .data-panel.position-left {
-        right: calc(100% + 10px);
-        top: 50%;
-        transform: translateY(-50%);
-      }
-
-      .data-panel.position-top {
-        bottom: calc(100% + 10px);
-        left: 50%;
-        transform: translateX(-50%);
-      }
-
-      .data-panel.position-bottom {
-        top: calc(100% + 10px);
-        left: 50%;
-        transform: translateX(-50%);
-      }
-
-      .data-panel.position-top-left {
-        bottom: calc(100% + 10px);
-        right: calc(100% + 10px);
-        transform: none;
-      }
-
-      .data-panel.position-top-right {
-        bottom: calc(100% + 10px);
-        left: calc(100% + 10px);
-        transform: none;
-      }
-
-      .data-panel.position-bottom-left {
-        top: calc(100% + 10px);
-        right: calc(100% + 10px);
-        transform: none;
-      }
-
-      .data-panel.position-bottom-right {
-        top: calc(100% + 10px);
-        left: calc(100% + 10px);
-        transform: none;
-      }
-
-      /* 始终显示的面板 */
-      .data-panel.always-show {
-        opacity: 1;
-        pointer-events: auto;
-      }
-      .data-panel-header {
-        font-size: 14px;
-        color: #409eff;
-        margin-bottom: 8px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid rgba(64, 158, 255, 0.2);
-      }
-      .data-panel-content {
-        font-size: 12px;
-        .data-panel-row {
+      flex-direction: column;
+      flex: 1;
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0px 0px 8px 0px;
+        color: #0ac5a8;
+        font-size: 22px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        .log-tabs {
           display: flex;
-          justify-content: space-between;
-          margin-bottom: 6px;
-          color: rgba(255, 255, 255, 0.9);
+          gap: 5px;
         }
-
-        .data-panel-label {
+        .log-tab {
+          position: relative;
+          font-size: 14px;
           color: rgba(255, 255, 255, 0.6);
-          font-size: 12px;
-        }
-      }
-      .data-panel-mechanical-arm {
-        background: linear-gradient(
-          145deg,
-          rgba(16, 42, 66, 0.95),
-          rgba(8, 72, 107, 0.95)
-        );
-        border: 1px solid rgba(0, 231, 255, 0.2);
-        box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
-          inset 0 0 0 1px rgba(0, 231, 255, 0.05);
-        backdrop-filter: blur(12px);
-        width: 140px;
-        .data-panel-header {
-          color: #00e7ff;
-          border-bottom: 1px solid rgba(0, 231, 255, 0.2);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          pointer-events: auto;
-          span {
-            margin-right: 8px;
+          cursor: pointer;
+          padding: 5px 15px;
+          border-radius: 4px;
+          transition: all 0.3s ease;
+          .alarm-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #f56c6c;
+            color: #fff;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
         }
-        .data-panel-row {
-          color: #e2e8f0;
-          .status-idle {
-            color: #409eff;
-          }
-
-          .status-processing {
-            color: #e6a23c;
-          }
-
-          .status-completed {
-            color: #67c23a;
-          }
+        .log-tab.active {
+          color: #fff;
+          background: rgba(10, 197, 168, 0.2);
         }
-        .data-panel-label {
-          color: rgba(0, 231, 255, 0.7);
+        .log-tab:hover:not(.active) {
+          color: #0ac5a8;
         }
       }
-    }
+      .scrollable-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 0;
+        .log-list {
+          padding: 0 10px;
+          width: 100%;
+          box-sizing: border-box;
+          .log-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            width: 100%;
+            box-sizing: border-box;
+            .log-time {
+              font-size: 12px;
+              color: rgba(255, 255, 255, 0.4);
+              margin-bottom: 6px;
+            }
+            .log-item-content {
+              color: rgba(255, 255, 255, 0.9);
+              font-size: 13px;
+              line-height: 1.6;
+              overflow-wrap: break-word;
+              word-wrap: break-word;
+              word-break: normal;
+              hyphens: auto;
+              display: block;
+              width: 100%;
+              padding-right: 10px;
+            }
+          }
+          .log-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+          }
 
-    /* 带按钮的点位样式 */
-    .marker-with-button {
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      transform: translate(-50%, -50%);
-      cursor: pointer;
-      z-index: 2;
-      .pulse {
-        background: rgba(255, 156, 0, 0.4);
-      }
-      .marker-button {
-        position: absolute;
-        left: calc(100% + 12px);
-        top: 50%;
-        transform: translateY(-50%);
-        background: linear-gradient(
-          145deg,
-          rgba(255, 156, 0, 0.9),
-          rgba(255, 126, 0, 0.9)
-        );
-        border: 1px solid rgba(255, 176, 20, 0.3);
-        border-radius: 6px;
-        color: white;
-        padding: 8px 16px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        white-space: nowrap;
-        box-shadow: 0 2px 6px rgba(255, 156, 0, 0.2);
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-      }
-      .marker-button:hover {
-        background: linear-gradient(
-          145deg,
-          rgba(255, 166, 10, 1),
-          rgba(255, 136, 10, 1)
-        );
-        transform: translateY(-50%) scale(1.05);
-        box-shadow: 0 4px 12px rgba(255, 156, 0, 0.3);
-      }
-      .marker-button:active {
-        transform: translateY(-50%) scale(0.98);
-        box-shadow: 0 2px 4px rgba(255, 156, 0, 0.2);
-      }
-    }
+          .log-item.alarm {
+            background: rgba(245, 108, 108, 0.05);
+          }
 
-    .marker-with-button::before {
-      content: '';
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: rgba(255, 156, 0, 0.8);
-      border-radius: 50%;
-      animation: glow 2s infinite;
-    }
-    @keyframes glow {
-      0% {
-        box-shadow: 0 0 0 0 rgba(255, 156, 0, 0.4);
+          .log-item.alarm.unread {
+            background: rgba(245, 108, 108, 0.1);
+            border-left: 2px solid #f56c6c;
+          }
+          /* 添加空状态样式 */
+          .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 0;
+            color: rgba(255, 255, 255, 0.6);
+            i {
+              font-size: 48px;
+              margin-bottom: 16px;
+              color: rgba(255, 255, 255, 0.3);
+            }
+            p {
+              font-size: 14px;
+              margin: 0 0 16px 0;
+            }
+            .el-button {
+              color: #0ac5a8;
+              font-size: 14px;
+              i {
+                font-size: 14px;
+                margin-right: 4px;
+                color: inherit;
+              }
+            }
+            .el-button:hover {
+              color: #0db196;
+            }
+          }
+        }
       }
-      70% {
-        box-shadow: 0 0 0 8px rgba(255, 156, 0, 0);
+      .scrollable-content::-webkit-scrollbar {
+        width: 4px;
       }
-      100% {
-        box-shadow: 0 0 0 0 rgba(255, 156, 0, 0);
+
+      .scrollable-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .scrollable-content::-webkit-scrollbar-thumb {
+        background: rgba(10, 197, 168, 0.2);
+        border-radius: 2px;
+      }
+
+      .scrollable-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(10, 197, 168, 0.4);
       }
     }
   }
-  /* 添加新的悬浮日志面板样式 */
-  .floating-log-container {
-    position: fixed;
-    bottom: 2px;
-    left: 2px;
-    width: 360px;
-    background: rgba(30, 42, 56, 0.95);
-    border: 1px solid rgba(64, 158, 255, 0.3);
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    transition: all 0.3s ease;
-    .log-header {
-      padding: 8px 16px;
-      background: rgba(64, 158, 255, 0.1);
-      border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+  .main-content {
+    flex: 1;
+    display: flex;
+    padding: 2px 8px 8px 0px;
+    box-sizing: border-box;
+    overflow: hidden;
+    height: 100%;
+    .floor-container {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: pointer;
-      user-select: none;
-      border-radius: 8px 8px 0 0;
-      .log-title {
-        color: #409eff;
-        font-size: 14px;
-        font-weight: 500;
-      }
-      .log-actions {
-        display: flex;
-        gap: 4px;
-      }
-    }
-    .log-content {
-      height: 240px;
-      overflow-y: auto;
-      padding: 8px;
-      .log-item {
-        padding: 4px 8px;
-        margin-bottom: 4px;
-        border-radius: 4px;
-        font-size: 12px;
-        display: flex;
-        gap: 8px;
-        color: #fff;
-        .log-time {
-          color: rgba(255, 255, 255, 0.5);
-          white-space: nowrap;
-        }
-        .log-message {
-          flex: 1;
-          word-break: break-all;
-        }
-      }
-      .log-item.info {
-        background: rgba(64, 158, 255, 0.1);
-      }
-      .log-item.error {
-        background: rgba(245, 108, 108, 0.1);
-        color: #f56c6c;
-      }
-    }
-    .log-content::-webkit-scrollbar {
-      width: 6px;
-    }
-    .log-content::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.1);
-      border-radius: 3px;
-    }
-    .log-content::-webkit-scrollbar-thumb {
-      background: rgba(64, 158, 255, 0.3);
-      border-radius: 3px;
-      transition: all 0.3s ease;
-    }
-    .log-content::-webkit-scrollbar-thumb:hover {
-      background: rgba(64, 158, 255, 0.5);
-    }
-    .empty-log {
+      gap: 10px;
       height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255, 255, 255, 0.3);
-      font-size: 14px;
-      gap: 8px;
-      i {
-        font-size: 24px;
+      width: 100%;
+      min-height: 0;
+
+      .floor-left {
+        flex: 1;
+        background: #07293e;
+        padding: 10px;
+        border-radius: 15px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+        color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+        box-sizing: border-box;
+        .floor-title {
+          font-size: 22px;
+          color: #0ac5a8;
+          font-weight: 900;
+          padding-bottom: 10px;
+          flex-shrink: 0;
+        }
+        .floor-image-container {
+          flex: 1;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          min-height: 0;
+          height: calc(100% - 50px);
+          position: relative;
+          .image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            .floor-image {
+              display: block;
+              max-width: 100%;
+              max-height: 100%;
+              width: auto;
+              height: auto;
+              object-fit: contain;
+            }
+
+            .marker-with-panel::before {
+              content: '';
+              position: absolute;
+              width: 10px;
+              height: 10px;
+              background: rgba(64, 158, 255, 0.8);
+              border-radius: 50%;
+              animation: glow-blue 2s infinite;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+            }
+
+            @keyframes glow-blue {
+              0% {
+                box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.4);
+              }
+              70% {
+                box-shadow: 0 0 0 8px rgba(64, 158, 255, 0);
+              }
+              100% {
+                box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
+              }
+            }
+            .marker-with-panel,
+            .marker-with-panel-machine {
+              position: absolute;
+              transform: translate(-50%, -50%);
+              z-index: 2;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              /* 添加机械臂标签样式 */
+              .arm-label {
+                color: #ff5722;
+                font-weight: bold;
+                font-size: 16px;
+                line-height: 1;
+                padding: 2px 4px;
+                border-radius: 3px;
+                cursor: pointer;
+              }
+              .marker-line {
+                position: absolute;
+                width: 100px;
+                height: 2px;
+                background: linear-gradient(
+                  90deg,
+                  rgba(64, 158, 255, 0.8),
+                  rgba(64, 158, 255, 0.2)
+                );
+                transform-origin: left center;
+                transition: all 0.3s ease;
+              }
+              .data-panel {
+                position: absolute;
+                background: rgba(30, 42, 56, 0.95);
+                border: 1px solid rgba(64, 158, 255, 0.3);
+                border-radius: 8px;
+                padding: 12px;
+                width: 200px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                opacity: 0;
+                transition: all 0.3s ease;
+                pointer-events: none;
+                z-index: 10;
+              }
+              /* 显示面板 */
+              .data-panel.show-panel {
+                opacity: 1;
+                pointer-events: auto;
+              }
+              /* 面板位置样式 */
+              .data-panel.position-right {
+                left: calc(100% + 10px);
+                top: 50%;
+                transform: translateY(-50%);
+              }
+
+              .data-panel.position-left {
+                right: calc(100% + 10px);
+                top: 50%;
+                transform: translateY(-50%);
+              }
+
+              .data-panel.position-top {
+                bottom: calc(100% + 10px);
+                left: 50%;
+                transform: translateX(-50%);
+              }
+
+              .data-panel.position-bottom {
+                top: calc(100% + 10px);
+                left: 50%;
+                transform: translateX(-50%);
+              }
+
+              .data-panel.position-top-left {
+                bottom: calc(100% + 10px);
+                right: calc(100% + 10px);
+                transform: none;
+              }
+
+              .data-panel.position-top-right {
+                bottom: calc(100% + 10px);
+                left: calc(100% + 10px);
+                transform: none;
+              }
+
+              .data-panel.position-bottom-left {
+                top: calc(100% + 10px);
+                right: calc(100% + 10px);
+                transform: none;
+              }
+
+              .data-panel.position-bottom-right {
+                top: calc(100% + 10px);
+                left: calc(100% + 10px);
+                transform: none;
+              }
+
+              /* 始终显示的面板 */
+              .data-panel.always-show {
+                opacity: 1;
+                pointer-events: auto;
+              }
+              .data-panel-header {
+                font-size: 14px;
+                color: #409eff;
+                margin-bottom: 8px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+              }
+              .data-panel-content {
+                font-size: 12px;
+                .data-panel-row {
+                  display: flex;
+                  justify-content: space-between;
+                  margin-bottom: 6px;
+                  color: rgba(255, 255, 255, 0.9);
+                }
+
+                .data-panel-label {
+                  color: rgba(255, 255, 255, 0.6);
+                  font-size: 12px;
+                }
+              }
+              .data-panel-mechanical-arm {
+                background: linear-gradient(
+                  145deg,
+                  rgba(16, 42, 66, 0.95),
+                  rgba(8, 72, 107, 0.95)
+                );
+                border: 1px solid rgba(0, 231, 255, 0.2);
+                box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
+                  inset 0 0 0 1px rgba(0, 231, 255, 0.05);
+                backdrop-filter: blur(12px);
+                width: 140px;
+                .data-panel-header {
+                  color: #00e7ff;
+                  border-bottom: 1px solid rgba(0, 231, 255, 0.2);
+                  font-weight: 500;
+                  text-transform: uppercase;
+                  letter-spacing: 1px;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  pointer-events: auto;
+                  span {
+                    margin-right: 8px;
+                  }
+                }
+                .data-panel-row {
+                  color: #e2e8f0;
+                  .status-idle {
+                    color: #409eff;
+                  }
+
+                  .status-processing {
+                    color: #e6a23c;
+                  }
+
+                  .status-completed {
+                    color: #67c23a;
+                  }
+                }
+                .data-panel-label {
+                  color: rgba(0, 231, 255, 0.7);
+                }
+              }
+            }
+
+            /* 带按钮的点位样式 */
+            .marker-with-button {
+              position: absolute;
+              width: 10px;
+              height: 10px;
+              transform: translate(-50%, -50%);
+              cursor: pointer;
+              z-index: 2;
+              .pulse {
+                background: rgba(255, 156, 0, 0.4);
+              }
+              .marker-button {
+                position: absolute;
+                left: calc(100% + 12px);
+                top: 50%;
+                transform: translateY(-50%);
+                background: linear-gradient(
+                  145deg,
+                  rgba(255, 156, 0, 0.9),
+                  rgba(255, 126, 0, 0.9)
+                );
+                border: 1px solid rgba(255, 176, 20, 0.3);
+                border-radius: 6px;
+                color: white;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                white-space: nowrap;
+                box-shadow: 0 2px 6px rgba(255, 156, 0, 0.2);
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+              }
+              .marker-button:hover {
+                background: linear-gradient(
+                  145deg,
+                  rgba(255, 166, 10, 1),
+                  rgba(255, 136, 10, 1)
+                );
+                transform: translateY(-50%) scale(1.05);
+                box-shadow: 0 4px 12px rgba(255, 156, 0, 0.3);
+              }
+              .marker-button:active {
+                transform: translateY(-50%) scale(0.98);
+                box-shadow: 0 2px 4px rgba(255, 156, 0, 0.2);
+              }
+            }
+
+            .marker-with-button::before {
+              content: '';
+              position: absolute;
+              width: 100%;
+              height: 100%;
+              background: rgba(255, 156, 0, 0.8);
+              border-radius: 50%;
+              animation: glow 2s infinite;
+            }
+            @keyframes glow {
+              0% {
+                box-shadow: 0 0 0 0 rgba(255, 156, 0, 0.4);
+              }
+              70% {
+                box-shadow: 0 0 0 8px rgba(255, 156, 0, 0);
+              }
+              100% {
+                box-shadow: 0 0 0 0 rgba(255, 156, 0, 0);
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -1106,8 +1281,8 @@ export default {
 
 .test-button-container {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 123px;
+  left: 8px;
   z-index: 1000;
   opacity: 0.6;
   transition: opacity 0.3s;
