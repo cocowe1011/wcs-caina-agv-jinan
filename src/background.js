@@ -197,7 +197,7 @@ app.on('ready', () => {
       '-Xmx4096m',
       '-Xms4096m',
       '-jar',
-      path.join(__static, './jarlib', 'ccs-deliver-middle.jar')
+      path.join(__static, './jarlib', 'wcs-agv-jinan-middle-anxin.jar')
     ]);
   }
 
@@ -216,9 +216,6 @@ app.on('ready', () => {
       ? mainWindow.setFullScreen(false)
       : mainWindow.setFullScreen(true);
   });
-  // 程序启动时判断是否存在报表、日志等本地文件夹，没有就创建
-  createFile('batchReport.grf');
-  createFile('boxreport.grf');
   // 定义自定义事件
   ipcMain.on('writeLogToLocal', (event, arg) => {
     fs.appendFile(
@@ -320,7 +317,7 @@ function sendHeartToPLC() {
       nowValue = 1 - nowValue;
     }
     times++;
-    writeValuesToPLC('DBW0', nowValue);
+    writeValuesToPLC('DBW100', nowValue);
   }, 200); // 每200毫秒执行一次交替
 }
 
@@ -340,7 +337,7 @@ var variables = {
   DBB120: 'DB101,C120.10' // 去一楼提升机放货处条码
 };
 
-var writeStrArr = [0, 0, 0, 0, 0, 0];
+var writeStrArr = [0, 0, 0, 0, '', ''];
 var writeAddArr = ['DBW100', 'DBW102', 'DBW104', 'DBW106', 'DBB110', 'DBB120'];
 
 // 给PLC写值
