@@ -9,7 +9,7 @@ const HttpUtilAGV = axios.create({
 HttpUtilAGV.interceptors.request.use(
   (config) => {
     // 添加X-LR-REQUEST-ID头部
-    config.headers['X-LR-REQUEST-ID'] = '222222';
+    config.headers['X-LR-REQUEST-ID'] = Date.now().toString();
     return config;
   },
   (error) => {
