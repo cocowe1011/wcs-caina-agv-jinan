@@ -127,12 +127,12 @@
                       <span>{{ twoEightHundredPalletCode || '--' }}</span>
                     </div>
                     <div class="data-panel-row">
-                      <span class="data-panel-label">来料托盘号：</span>
-                      <span>{{ scanInfo.trayCode || '--' }}</span>
+                      <span class="data-panel-label">来料名称：</span>
+                      <span>{{ scanInfo.descrC || '--' }}</span>
                     </div>
                     <div class="data-panel-row">
-                      <span class="data-panel-label">来料名称：</span>
-                      <span>{{ scanInfo.productName || '--' }}</span>
+                      <span class="data-panel-label">目的地：</span>
+                      <span>{{ scanInfo.mudidi || '--' }}</span>
                     </div>
                   </div>
                 </div>
@@ -150,7 +150,7 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '--' }}</span>
+                      <span>{{ '--' }}</span>
                     </div>
                   </div>
                 </div>
@@ -168,7 +168,7 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '--' }}</span>
+                      <span>{{ '--' }}</span>
                     </div>
                   </div>
                 </div>
@@ -186,7 +186,7 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '--' }}</span>
+                      <span>{{ '--' }}</span>
                     </div>
                   </div>
                 </div>
@@ -204,7 +204,7 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">产品名称：</span>
-                      <span>{{ scanInfo.productName || '--' }}</span>
+                      <span>{{ '--' }}</span>
                     </div>
                   </div>
                 </div>
@@ -305,21 +305,64 @@
           >
             {{ area }}区
           </div>
+
+          <!-- 刷新按钮移动到这里 -->
+          <div class="refresh-button">
+            <el-button
+              type="primary"
+              size="mini"
+              icon="el-icon-refresh"
+              @click="loadPalletStorageByArea(currentStorageArea)"
+              :loading="isRefreshing"
+            >
+              刷新
+            </el-button>
+          </div>
         </div>
+
         <div
-          v-for="(position, index) in currentStoragePositions"
+          v-for="(item, index) in currentStoragePositions"
           :key="index"
           class="storage-card"
-          :class="{ 'can-move': position.palletCode }"
+          :class="{ 'can-move': item.trayInfo }"
         >
           <div class="storage-card-header">
-            <span>位置 {{ position.name }}</span>
+            <span
+              >位置 {{ item.queueName + item.queueNum
+              }}<el-tag
+                v-if="item.trayStatus === '0'"
+                size="small"
+                style="margin-left: 15px"
+                >托盘送往缓存区中</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '1'"
+                type="success"
+                size="small"
+                style="margin-left: 15px"
+                >托盘已送至缓存区</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '2'"
+                size="small"
+                style="margin-left: 15px"
+                >托盘送往目的地中</el-tag
+              ></span
+            >
             <div class="card-actions">
               <el-button
+                v-if="item.trayInfo"
+                type="text"
+                size="mini"
+                @click="handleExecutePallet(item)"
+              >
+                <i class="el-icon-position"></i>
+                发送
+              </el-button>
+              <el-button
+                v-else
                 type="text"
                 size="mini"
                 class="danger-button"
-                @click="handleRemovePallet(position)"
+                @click="handleRemovePallet(item)"
               >
                 <i class="el-icon-delete"></i>
                 移除
@@ -327,10 +370,10 @@
             </div>
           </div>
           <div class="storage-card-content">
-            <template v-if="position.palletCode">
+            <template v-if="item.trayInfo">
               <div class="storage-info">
                 <span class="label">托盘码：</span>
-                <span class="value">{{ position.palletCode }}</span>
+                <span class="value">{{ item.trayInfo }}</span>
               </div>
             </template>
             <template v-else>
@@ -398,18 +441,9 @@ export default {
       palletStorageDrawerVisible: false,
       currentStorageArea: 'A', // 当前选中的缓存区
       palletStorageAreas: {
-        A: Array.from({ length: 100 }, (_, i) => ({
-          name: `A${i + 1}`,
-          palletCode: null
-        })),
-        B: Array.from({ length: 100 }, (_, i) => ({
-          name: `B${i + 1}`,
-          palletCode: null
-        })),
-        C: Array.from({ length: 100 }, (_, i) => ({
-          name: `C${i + 1}`,
-          palletCode: null
-        }))
+        A: [],
+        B: [],
+        C: []
       },
       mechanicalArms: [
         {
@@ -495,8 +529,8 @@ export default {
       ],
       testPanelVisible: false,
       scanInfo: {
-        trayCode: '',
-        productName: ''
+        descrC: '',
+        mudidi: ''
       },
       activeLogType: 'running',
       runningLogs: [], // 修改为空数组
@@ -563,7 +597,8 @@ export default {
       // 2800接货处条码
       twoEightHundredPalletCode: '',
       // 2500接货处条码
-      twoFiveHundredPalletCode: ''
+      twoFiveHundredPalletCode: '',
+      isRefreshing: false
     };
   },
   computed: {
@@ -724,7 +759,36 @@ export default {
     },
     handlePalletStorageClick(area) {
       this.currentStorageArea = area;
+      // 打开抽屉前重新查询数据
+      this.loadPalletStorageByArea(area);
       this.palletStorageDrawerVisible = true;
+    },
+    // 加载指定区域的托盘存储数据
+    loadPalletStorageByArea(area) {
+      this.$set(this.palletStorageAreas, area, []); // 清空当前区域数据，显示加载状态
+      this.isRefreshing = true;
+
+      const params = {
+        queueName: area
+      };
+
+      HttpUtil.post('/queue_info/queryQueueList', params)
+        .then((res) => {
+          if (res.data && Array.isArray(res.data)) {
+            // 如果API返回的数据已经是格式化好的，直接使用
+            this.$set(this.palletStorageAreas, area, res.data);
+          } else {
+            // 如果API返回的数据需要格式化，进行处理
+            this.$message.warning(`获取${area}区托盘数据格式不正确`);
+          }
+        })
+        .catch((err) => {
+          console.error(`获取${area}区托盘数据失败:`, err);
+          this.$message.error(`获取${area}区托盘数据失败`);
+        })
+        .finally(() => {
+          this.isRefreshing = false;
+        });
     },
     handleRemovePallet(position) {
       this.$confirm('确认移除该托盘码吗？', '提示', {
@@ -733,8 +797,24 @@ export default {
         type: 'warning'
       })
         .then(() => {
-          position.palletCode = null;
-          this.$message.success('托盘已移除');
+          // 调用API更新数据库中的托盘信息
+          HttpUtil.post('/pallet_storage/removePallet', {
+            area: this.currentStorageArea,
+            position: position.name,
+            palletCode: position.palletCode
+          })
+            .then(() => {
+              // API调用成功后更新本地数据
+              position.palletCode = null;
+              this.$message.success('托盘已移除');
+              this.addLog(
+                `已从${this.currentStorageArea}区${position.name}移除托盘`
+              );
+            })
+            .catch((err) => {
+              console.error('移除托盘失败:', err);
+              this.$message.error('移除托盘失败，请重试');
+            });
         })
         .catch(() => {});
     },
@@ -763,9 +843,11 @@ export default {
           if (res.data && res.data.length > 0) {
             // 根据托盘信息给agv小车发送指令
             this.addLog(`读取托盘成功：${JSON.stringify(res.data)}`);
-            this.scanInfo.trayCode = res.data[0].traceid;
-            this.scanInfo.productName = res.data[0].descrC;
+            this.scanInfo.mudidi = res.data[0].mudidi;
+            this.scanInfo.descrC = res.data[0].descrC;
             // 根据托盘信息给AGV小车发送指令
+            // 直接把托盘信息写入数据库-先写死测试
+            this.addTrayToQueue(trayCode);
           } else {
             // 没查询到货物信息，直接报警
             this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
@@ -775,6 +857,47 @@ export default {
           this.$message.error('查询托盘失败，请重试' + err);
           // 没查询到货物信息，直接报警
           this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+        });
+    },
+    addTrayToQueue(trayCode) {
+      // 判断目的地-先不判断，先直接写死进入C队列
+      // 查询C队列托盘情况，查找第一个空闲的托盘位置
+      const params = {
+        queueName: 'C'
+      };
+      HttpUtil.post('/queue_info/queryQueueList', params)
+        .then((res) => {
+          if (res.data && res.data.length > 0) {
+            // 查找第一个空闲的托盘位置
+            const emptyPosition = res.data.find(
+              (item) => item.trayInfo === null || item.trayInfo === ''
+            );
+            if (emptyPosition) {
+              // 更新托盘信息
+              const param = {
+                id: emptyPosition.id,
+                trayInfo: trayCode,
+                trayStatus: 1
+              };
+              HttpUtil.post('/queue_info/update', param)
+                .then(() => {
+                  this.$message.success('托盘已入库');
+                  this.addLog(
+                    `托盘已入库：${trayCode}, 缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}`
+                  );
+                })
+                .catch((err) => {
+                  this.$message.error('托盘入库失败，请重试');
+                  this.addLog(`托盘入库失败：${trayCode},${err}`);
+                });
+            } else {
+              this.$message.error('缓存区没有空闲位置');
+              this.addLog(`${trayCode} 托盘入库失败，缓存区没有空闲位置`);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('查询C队列托盘情况失败:', err);
         });
     },
     toggleArmPanel(armName) {
@@ -789,6 +912,8 @@ export default {
     },
     switchStorageArea(area) {
       this.currentStorageArea = area;
+      // 切换区域时重新加载数据
+      this.loadPalletStorageByArea(area);
     },
     // 添加新的日志方法
     addLog(message, type = 'running') {
@@ -1460,6 +1585,12 @@ export default {
           box-shadow: inset 0 -2px 0 #409eff;
         }
       }
+
+      .refresh-button {
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+      }
     }
 
     .storage-card {
@@ -1469,11 +1600,12 @@ export default {
       margin-bottom: 16px;
       overflow: hidden;
       transition: all 0.3s ease;
+      cursor: pointer;
       .storage-card-header {
         background: rgba(64, 158, 255, 0.1);
         padding: 12px 16px;
         font-size: 16px;
-        font-weight: 500;
+        font-weight: 800;
         color: #409eff;
         border-bottom: 1px solid rgba(64, 158, 255, 0.2);
         display: flex;
@@ -1520,13 +1652,6 @@ export default {
           font-style: italic;
         }
       }
-    }
-    .storage-card.can-move {
-      cursor: pointer;
-    }
-    .storage-card.can-move:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
     }
   }
   /* 自定义滚动条样式 */
