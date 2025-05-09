@@ -196,6 +196,7 @@ app.on('ready', () => {
     spawn(path.join(__static, './jre', 'jre1.8.0_251', 'bin', 'java'), [
       '-Xmx4096m',
       '-Xms4096m',
+      '-Dfile.encoding=UTF-8',
       '-jar',
       path.join(__static, './jarlib', 'wcs-agv-jinan-middle-anxin.jar')
     ]);
