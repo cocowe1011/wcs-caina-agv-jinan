@@ -45,6 +45,80 @@
         </div>
       </div>
 
+      <!-- AGV调度区域 -->
+      <div class="agv-schedule-section">
+        <div class="section-header">
+          <span>AGV调度</span>
+        </div>
+        <div class="agv-schedule-content">
+          <div class="agv-route-selector">
+            <div class="route-row">
+              <div class="route-item">
+                <div class="route-label">起点：</div>
+                <select
+                  v-model="agvSchedule.startPosition"
+                  class="native-select"
+                >
+                  <option value="" disabled>选择起点</option>
+                  <option
+                    v-for="item in startAgvPositions"
+                    :key="item.value"
+                    :value="item.value"
+                  >
+                    {{ item.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="route-item">
+                <div class="route-label">终点：</div>
+                <select v-model="agvSchedule.endPosition" class="native-select">
+                  <option value="" disabled>选择终点</option>
+                  <option
+                    v-for="item in endAgvPositions"
+                    :key="item.value"
+                    :value="item.value"
+                  >
+                    {{ item.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="agv-controls">
+            <el-button
+              type="primary"
+              size="mini"
+              class="agv-btn"
+              icon="el-icon-position"
+              :loading="singleBtnLoading"
+              @click="handleSingleModeChange()"
+            >
+              单次执行
+            </el-button>
+            <el-button
+              type="danger"
+              size="mini"
+              class="agv-btn"
+              icon="el-icon-close"
+              v-if="agvSchedule.status === 'cycleRunning'"
+              @click="handleAgvModeChange(false)"
+            >
+              停止循环执行
+            </el-button>
+            <el-button
+              type="primary"
+              size="mini"
+              class="agv-btn"
+              icon="el-icon-refresh"
+              v-else
+              @click="handleAgvModeChange(true)"
+            >
+              循环执行
+            </el-button>
+          </div>
+        </div>
+      </div>
+
       <!-- 日志区域 -->
       <div class="log-section">
         <div class="section-header">
@@ -422,6 +496,21 @@
               </el-form-item>
             </el-form>
           </div>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="托盘码">
+                <el-input
+                  v-model="twoEightHundredPalletTestCode"
+                  placeholder="请输入托盘码"
+                ></el-input>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" size="small" @click="testDatabase"
+                  >数据库接口测试</el-button
+                >
+              </el-form-item>
+            </el-form>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -598,7 +687,62 @@ export default {
       twoEightHundredPalletCode: '',
       // 2500接货处条码
       twoFiveHundredPalletCode: '',
-      isRefreshing: false
+      isRefreshing: false,
+      singleBtnLoading: false, // 新增单次执行按钮的loading状态
+      agvSchedule: {
+        startPosition: '',
+        endPosition: '',
+        status: 'idle' // idle没任务 singleRunning单次任务执行中 cycleRunning多次任务执行中
+      },
+      // 新增起点点位列表
+      startAgvPositions: [
+        { value: 'AGV2-1', label: 'AGV2-1' },
+        { value: 'C6', label: 'C6' },
+        { value: 'C7', label: 'C7' },
+        { value: 'C8', label: 'C8' },
+        { value: 'C9', label: 'C9' },
+        { value: 'C10', label: 'C10' },
+        { value: 'C11', label: 'C11' },
+        { value: 'C12', label: 'C12' },
+        { value: 'C13', label: 'C13' },
+        { value: 'C14', label: 'C14' },
+        { value: 'C15', label: 'C15' },
+        { value: 'C16', label: 'C16' },
+        { value: 'C17', label: 'C17' },
+        { value: 'C18', label: 'C18' },
+        { value: 'C19', label: 'C19' },
+        { value: 'C20', label: 'C20' }
+      ],
+      // 新增终点点位列表
+      endAgvPositions: [
+        { value: 'AGV2-2', label: 'AGV2-2' },
+        { value: 'AGV2-3', label: 'AGV2-3' },
+        { value: 'C6', label: 'C6' },
+        { value: 'C7', label: 'C7' },
+        { value: 'C8', label: 'C8' },
+        { value: 'C9', label: 'C9' },
+        { value: 'C10', label: 'C10' },
+        { value: 'C11', label: 'C11' },
+        { value: 'C12', label: 'C12' },
+        { value: 'C13', label: 'C13' },
+        { value: 'C14', label: 'C14' },
+        { value: 'C15', label: 'C15' },
+        { value: 'C16', label: 'C16' },
+        { value: 'C17', label: 'C17' },
+        { value: 'C18', label: 'C18' },
+        { value: 'C19', label: 'C19' },
+        { value: 'C20', label: 'C20' }
+      ],
+      // 定义一个map，可以通过type获取到code
+      agvCodeMap: {
+        'AGV2-1': '102',
+        'AGV2-2': '201',
+        'AGV2-3': '301',
+        '2500输送线': '101',
+        'AGV1-1': '202',
+        'AGV3-1': '302'
+      },
+      twoEightHundredPalletTestCode: ''
     };
   },
   computed: {
@@ -821,6 +965,16 @@ export default {
     showTestPanel() {
       this.testPanelVisible = true;
     },
+    testDatabase() {
+      if (!this.twoEightHundredPalletTestCode) {
+        this.$message.warning('请填写完整的测试托盘码');
+        return;
+      }
+      // 调用接口读取托盘信息
+      this.getTrayInfo(this.twoEightHundredPalletTestCode);
+      // 关闭测试面板
+      this.testPanelVisible = false;
+    },
     simulateScan() {
       if (!this.twoEightHundredPalletCode) {
         this.$message.warning('请填写完整的扫码信息');
@@ -833,7 +987,7 @@ export default {
     },
     getTrayInfo(trayCode) {
       const params = {
-        traceid: trayCode,
+        traceid: trayCode.trim(),
         zt: 'N',
         cheijian: '2800'
       };
@@ -958,6 +1112,120 @@ export default {
       } else {
         return value; // 非负数保持不变
       }
+    },
+    handleAgvModeChange(val) {
+      if (!this.agvSchedule.startPosition || !this.agvSchedule.endPosition) {
+        this.$message.warning('请先选择起点和终点');
+        return;
+      }
+      // 判断起点和终点是否相同
+      if (this.agvSchedule.startPosition === this.agvSchedule.endPosition) {
+        this.$message.warning('起点和终点不能相同');
+        return;
+      }
+
+      // 判断是否在单次执行
+      if (this.agvSchedule.status === 'singleRunning') {
+        this.$message.warning('当前正在单次执行，请先等待单次执行完成');
+        return;
+      }
+    },
+
+    handleSingleModeChange() {
+      if (!this.agvSchedule.startPosition || !this.agvSchedule.endPosition) {
+        this.$message.warning('请先选择起点和终点');
+        return;
+      }
+      // 判断起点和终点是否相同
+      if (this.agvSchedule.startPosition === this.agvSchedule.endPosition) {
+        this.$message.warning('起点和终点不能相同');
+        return;
+      }
+      // 判断当前是否在循环执行
+      if (this.agvSchedule.status === 'cycleRunning') {
+        this.$message.warning('当前正在循环执行，请先停止循环执行');
+        return;
+      }
+      // PF-FMR-COMMON-JH	转盘-输送线，起点终点都与plc进行安全交互
+      // PF-FMR-COMMON-JH1 转盘-缓存区，只有起点与plc进行安全交互
+      // PF-FMR-COMMON-JH2 缓存区-输送线，只有终点与plc进行安全交互
+      // 判断起点类型
+      let taskType = '';
+      let fromSiteCode = '';
+      let toSiteCode = '';
+
+      if (this.agvSchedule.startPosition === 'AGV2-1') {
+        // 说明起点是转盘
+        fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
+
+        if (this.agvSchedule.endPosition.includes('AGV')) {
+          // 转盘-输送线，起点终点都与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH';
+          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+        } else {
+          // 转盘-缓存区，只有起点与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH1';
+          toSiteCode = this.agvSchedule.endPosition;
+        }
+      } else {
+        // 说明起点是缓存区
+        fromSiteCode = this.agvSchedule.startPosition;
+
+        if (this.agvSchedule.endPosition.includes('AGV')) {
+          // 缓存区-输送线，只有终点与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH2';
+          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+        } else {
+          // 缓存区-缓存区，不需要与plc交互，报错，没有这种任务类型
+          taskType = 'ERROR';
+        }
+      }
+      if (taskType === 'ERROR') {
+        this.$message.warning(
+          `指令为缓存区到缓存区，没有这种任务类型，请检查！`
+        );
+      }
+      this.singleBtnLoading = true; // 使用单独的loading状态
+      this.agvSchedule.status = 'singleRunning';
+      // 调用发送AGV指令方法
+      this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+      // 在一段时间后重置loading状态
+      setTimeout(() => {
+        this.singleBtnLoading = false;
+      }, 2000);
+    },
+    stopAgvSchedule() {
+      if (this.agvSchedule.status === 'cycleRunning') {
+        this.agvSchedule.status = 'idle';
+        this.addLog('AGV调度已停止(循环)');
+      }
+    },
+    sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
+      // 组装入参
+      const params = {
+        taskType: taskType,
+        targetRoute: [
+          {
+            type: 'SITE',
+            code: fromSiteCode
+          },
+          {
+            type: 'SITE',
+            code: toSiteCode
+          }
+        ]
+      };
+      this.addLog(
+        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      );
+      // 发送AGV指令
+      HttpUtilAGV.post('/rcs/rtas/api/robot/controller/task/submit', params)
+        .then((res) => {
+          console.log(res);
+        })
+        .catch((err) => {
+          console.error('发送AGV指令失败:', err);
+        });
     }
   }
 };
@@ -1072,6 +1340,86 @@ export default {
 
       .schedule-content::-webkit-scrollbar-thumb:hover {
         background: rgba(10, 197, 168, 0.4);
+      }
+    }
+
+    /* AGV调度区域 */
+    .agv-schedule-section {
+      background: #07293e;
+      padding: 10px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0px 0px 8px 0px;
+        color: #0ac5a8;
+        font-size: 22px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .agv-schedule-content {
+        padding: 8px 0 0 0;
+
+        .agv-route-selector {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 8px;
+
+          .route-row {
+            display: flex;
+            gap: 10px;
+          }
+
+          .route-item {
+            display: flex;
+            align-items: center;
+            flex: 1;
+
+            .route-label {
+              color: rgba(255, 255, 255, 0.8);
+              width: 50px;
+            }
+
+            /* 新增原生选择框样式 */
+            .native-select {
+              flex: 1;
+              background: rgba(10, 197, 168, 0.1);
+              border: 1px solid rgba(10, 197, 168, 0.3);
+              color: #fff;
+              padding: 5px 8px; /* 根据需要调整内边距 */
+              border-radius: 4px; /* 根据需要调整圆角 */
+              height: 28px; /* 与 el-select size="mini" 大致匹配 */
+              box-sizing: border-box;
+              font-size: 12px; /* 与 el-select size="mini" 大致匹配 */
+            }
+
+            .native-select:focus {
+              outline: none;
+              border-color: #0ac5a8;
+            }
+
+            /* 可选：为 option 添加样式 */
+            .native-select option {
+              background: #07293e; /* 下拉选项的背景色 */
+              color: #fff; /* 下拉选项的文字颜色 */
+            }
+          }
+        }
+
+        .agv-controls {
+          width: 100%;
+          display: flex;
+
+          .agv-btn {
+            flex: 1;
+            justify-content: center;
+          }
+        }
       }
     }
 

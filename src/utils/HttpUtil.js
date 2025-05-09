@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const HttpUtil = axios.create({
   baseURL: process.env.VUE_APP_BASE_URL,
-  timeout: 20000 // 请求超时时间
+  timeout: 5000 // 请求超时时间
 });
 
 // 添加响应拦截器
