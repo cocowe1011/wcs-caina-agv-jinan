@@ -55,32 +55,25 @@
             <div class="route-row">
               <div class="route-item">
                 <div class="route-label">起点：</div>
-                <select
+                <el-autocomplete
                   v-model="agvSchedule.startPosition"
-                  class="native-select"
-                >
-                  <option value="" disabled>选择起点</option>
-                  <option
-                    v-for="item in startAgvPositions"
-                    :key="item.value"
-                    :value="item.value"
-                  >
-                    {{ item.label }}
-                  </option>
-                </select>
+                  :fetch-suggestions="querySearchStartAsync"
+                  placeholder="选择或输入起点"
+                  @select="handleStartSelect"
+                  class="agv-input"
+                  size="mini"
+                ></el-autocomplete>
               </div>
               <div class="route-item">
                 <div class="route-label">终点：</div>
-                <select v-model="agvSchedule.endPosition" class="native-select">
-                  <option value="" disabled>选择终点</option>
-                  <option
-                    v-for="item in endAgvPositions"
-                    :key="item.value"
-                    :value="item.value"
-                  >
-                    {{ item.label }}
-                  </option>
-                </select>
+                <el-autocomplete
+                  v-model="agvSchedule.endPosition"
+                  :fetch-suggestions="querySearchEndAsync"
+                  placeholder="选择或输入终点"
+                  @select="handleEndSelect"
+                  class="agv-input"
+                  size="mini"
+                ></el-autocomplete>
               </div>
             </div>
           </div>
@@ -90,7 +83,6 @@
               size="mini"
               class="agv-btn"
               icon="el-icon-position"
-              :loading="singleBtnLoading"
               @click="handleSingleModeChange()"
             >
               单次执行
@@ -153,7 +145,6 @@
                   'log-item',
                   { alarm: log.type === 'alarm', unread: log.unread }
                 ]"
-                @click="markAsRead(log)"
               >
                 <div class="log-time">{{ log.timestamp }}</div>
                 <div class="log-item-content">{{ log.message }}</div>
@@ -709,7 +700,6 @@ export default {
       // 2500接货处条码
       twoFiveHundredPalletCode: '',
       isRefreshing: false,
-      singleBtnLoading: false, // 新增单次执行按钮的loading状态
       agvSchedule: {
         startPosition: '',
         endPosition: '',
@@ -717,43 +707,12 @@ export default {
       },
       // 新增起点点位列表
       startAgvPositions: [
-        { value: 'AGV2-1', label: 'AGV2-1' },
-        { value: 'C6', label: 'C6' },
-        { value: 'C7', label: 'C7' },
-        { value: 'C8', label: 'C8' },
-        { value: 'C9', label: 'C9' },
-        { value: 'C10', label: 'C10' },
-        { value: 'C11', label: 'C11' },
-        { value: 'C12', label: 'C12' },
-        { value: 'C13', label: 'C13' },
-        { value: 'C14', label: 'C14' },
-        { value: 'C15', label: 'C15' },
-        { value: 'C16', label: 'C16' },
-        { value: 'C17', label: 'C17' },
-        { value: 'C18', label: 'C18' },
-        { value: 'C19', label: 'C19' },
-        { value: 'C20', label: 'C20' }
+        { value: 'AGV2-1' },
+        { value: 'AGV1-1' },
+        { value: 'AGV3-1' }
       ],
       // 新增终点点位列表
-      endAgvPositions: [
-        { value: 'AGV2-2', label: 'AGV2-2' },
-        { value: 'AGV2-3', label: 'AGV2-3' },
-        { value: 'C6', label: 'C6' },
-        { value: 'C7', label: 'C7' },
-        { value: 'C8', label: 'C8' },
-        { value: 'C9', label: 'C9' },
-        { value: 'C10', label: 'C10' },
-        { value: 'C11', label: 'C11' },
-        { value: 'C12', label: 'C12' },
-        { value: 'C13', label: 'C13' },
-        { value: 'C14', label: 'C14' },
-        { value: 'C15', label: 'C15' },
-        { value: 'C16', label: 'C16' },
-        { value: 'C17', label: 'C17' },
-        { value: 'C18', label: 'C18' },
-        { value: 'C19', label: 'C19' },
-        { value: 'C20', label: 'C20' }
-      ],
+      endAgvPositions: [{ value: 'AGV2-2' }, { value: 'AGV2-3' }],
       // 定义一个map，可以通过type获取到code
       agvCodeMap: {
         'AGV2-1': '102',
@@ -870,6 +829,7 @@ export default {
       async handler(newVal) {
         if (newVal !== '' && this.agvScheduleCondition.bit0 === '1') {
           this.addLog(`2800接货处扫码数据：${newVal}`);
+          // 自动触发AGV运输任务，从2800到C区缓存位
           this.getTrayInfo(this.twoEightHundredPalletCode);
         }
       }
@@ -1214,14 +1174,9 @@ export default {
           `指令为缓存区到缓存区，没有这种任务类型，请检查！`
         );
       }
-      this.singleBtnLoading = true; // 使用单独的loading状态
       this.agvSchedule.status = 'singleRunning';
       // 调用发送AGV指令方法
       this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
-      // 在一段时间后重置loading状态
-      setTimeout(() => {
-        this.singleBtnLoading = false;
-      }, 2000);
     },
     stopAgvSchedule() {
       if (this.agvSchedule.status === 'cycleRunning') {
@@ -1230,61 +1185,62 @@ export default {
       }
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
-      return Date.now().toString();
+      // 测试用，返回当前时间戳
+      // return Date.now().toString();
       // 组装入参
-      // const params = {
-      //   taskType: taskType,
-      //   targetRoute: [
-      //     {
-      //       type: 'SITE',
-      //       code: fromSiteCode
-      //     },
-      //     {
-      //       type: 'SITE',
-      //       code: toSiteCode
-      //     }
-      //   ]
-      // };
-      // this.addLog(
-      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      // );
-      // try {
-      //   // 发送AGV指令
-      //   const res = await HttpUtilAGV.post(
-      //     '/rcs/rtas/api/robot/controller/task/submit',
-      //     params
-      //   );
-      //   if (res.code === 'SUCCESS') {
-      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-      //     // 成功时返回robotTaskCode
-      //     return res.data.robotTaskCode;
-      //   } else {
-      //     // 处理各种错误类型
-      //     let errorMsg = '';
-      //     switch (res.errorCode) {
-      //       case 'Err_TaskTypeNotSupport':
-      //         errorMsg = '任务类型不支持';
-      //         break;
-      //       case 'Err_RobotGroupsNotMatch':
-      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_RobotCodeNotMatch':
-      //         errorMsg = '机器人编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_TargetRouteError':
-      //         errorMsg = '任务路径参数有误';
-      //         break;
-      //       default:
-      //         errorMsg = res.message || '未知错误';
-      //     }
-      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
-      //     return '';
-      //   }
-      // } catch (err) {
-      //   console.error('发送AGV指令失败:', err);
-      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-      //   return '';
-      // }
+      const params = {
+        taskType: taskType,
+        targetRoute: [
+          {
+            type: 'SITE',
+            code: fromSiteCode
+          },
+          {
+            type: 'SITE',
+            code: toSiteCode
+          }
+        ]
+      };
+      this.addLog(
+        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/submit',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodeNotMatch':
+              errorMsg = '机器人编号与任务不匹配，无法调度';
+              break;
+            case 'Err_TargetRouteError':
+              errorMsg = '任务路径参数有误';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     },
     startPalletMovePolling() {
       if (this.pollingTimerCtoAGV22) {
@@ -1344,6 +1300,31 @@ export default {
             `托盘${firstPallet.trayInfo}进入AGV2-2队列失败，请检查。${err}`
           );
         });
+    },
+    handleStartSelect(item) {
+      this.agvSchedule.startPosition = item.value;
+    },
+    handleEndSelect(item) {
+      this.agvSchedule.endPosition = item.value;
+    },
+    querySearchStartAsync(queryString, cb) {
+      const results = queryString
+        ? this.startAgvPositions.filter(this.createFilter(queryString))
+        : this.startAgvPositions;
+      // el-autocomplete 需要一个 value 字段用于显示
+      cb(results);
+    },
+    querySearchEndAsync(queryString, cb) {
+      const results = queryString
+        ? this.endAgvPositions.filter(this.createFilter(queryString))
+        : this.endAgvPositions;
+      // el-autocomplete 需要一个 value 字段用于显示
+      cb(results);
+    },
+    createFilter(queryString) {
+      return (item) => {
+        return item.value.toLowerCase().indexOf(queryString.toLowerCase()) > 0;
+      };
     }
   }
 };
@@ -1502,29 +1483,12 @@ export default {
               color: rgba(255, 255, 255, 0.8);
               width: 50px;
             }
-
-            /* 新增原生选择框样式 */
-            .native-select {
+            .agv-input {
               flex: 1;
-              background: rgba(10, 197, 168, 0.1);
-              border: 1px solid rgba(10, 197, 168, 0.3);
-              color: #fff;
-              padding: 5px 8px; /* 根据需要调整内边距 */
-              border-radius: 4px; /* 根据需要调整圆角 */
-              height: 28px; /* 与 el-select size="mini" 大致匹配 */
-              box-sizing: border-box;
-              font-size: 12px; /* 与 el-select size="mini" 大致匹配 */
-            }
-
-            .native-select:focus {
-              outline: none;
-              border-color: #0ac5a8;
-            }
-
-            /* 可选：为 option 添加样式 */
-            .native-select option {
-              background: #07293e; /* 下拉选项的背景色 */
-              color: #fff; /* 下拉选项的文字颜色 */
+              //深度修改 .el-autocomplete-suggestion li 的样式
+              :deep(.el-autocomplete-suggestion li) {
+                font-size: 12px;
+              }
             }
           }
         }
