@@ -266,7 +266,7 @@
                 </div>
               </div>
               <!-- 一楼灌装线B -->
-              <div class="marker-with-panel" data-x="2900" data-y="1020">
+              <div class="marker-with-panel" data-x="2980" data-y="1030">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
@@ -288,7 +288,9 @@
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
-                  @click="handlePalletStorageClick('A')"
+                  @click="
+                    handlePalletStorageClick('A', '拆垛间缓存库位(A1-A100)')
+                  "
                 >
                   拆垛间缓存库位(A1-A100)
                 </button>
@@ -297,7 +299,9 @@
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
-                  @click="handlePalletStorageClick('B')"
+                  @click="
+                    handlePalletStorageClick('B', '三楼货物缓存库位(B1-B100)')
+                  "
                 >
                   三楼货物缓存库位(B1-B100)
                 </button>
@@ -306,9 +310,20 @@
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
-                  @click="handlePalletStorageClick('C')"
+                  @click="
+                    handlePalletStorageClick('C', '一楼货物缓存库位(C1-C100)')
+                  "
                 >
                   一楼货物缓存库位(C1-C100)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="2410" data-y="1010">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('AGV2-2', 'AGV2-2队列')"
+                >
+                  AGV2-2队列
                 </button>
               </div>
               <!-- 机械臂 -->
@@ -361,39 +376,29 @@
 
     <!-- 托盘缓存区抽屉 -->
     <el-drawer
-      :title="`托盘缓存区 ${currentStorageArea}区`"
       :visible.sync="palletStorageDrawerVisible"
       direction="rtl"
       size="400px"
       :modal="false"
       custom-class="storage-drawer"
     >
-      <div class="storage-container">
-        <div class="area-tabs">
-          <div
-            v-for="area in ['A', 'B', 'C']"
-            :key="area"
-            class="area-tab"
-            :class="{ active: currentStorageArea === area }"
-            @click="switchStorageArea(area)"
+      <template #title>
+        <div class="drawer-title-container">
+          <span>{{ currentStorageTitle }}</span>
+          <el-button
+            type="primary"
+            size="mini"
+            icon="el-icon-refresh"
+            @click="loadPalletStorageByArea(currentStorageArea)"
+            :loading="isRefreshing"
+            class="title-refresh-button"
           >
-            {{ area }}区
-          </div>
-
-          <!-- 刷新按钮移动到这里 -->
-          <div class="refresh-button">
-            <el-button
-              type="primary"
-              size="mini"
-              icon="el-icon-refresh"
-              @click="loadPalletStorageByArea(currentStorageArea)"
-              :loading="isRefreshing"
-            >
-              刷新
-            </el-button>
-          </div>
+            刷新
+          </el-button>
         </div>
-
+      </template>
+      <div class="storage-container">
+        <!-- 原刷新按钮容器 .area-tabs 将被移除 -->
         <div
           v-for="(item, index) in currentStoragePositions"
           :key="index"
@@ -536,6 +541,7 @@ export default {
   name: 'FloorFirst',
   data() {
     return {
+      currentStorageTitle: '', // 新增：用于抽屉标题
       visibleArmPanels: [], // 当前显示的机械臂面板ID列表
       palletStorageDrawerVisible: false,
       currentStorageArea: 'A', // 当前选中的缓存区
@@ -911,8 +917,9 @@ export default {
     beforeDestroy() {
       window.removeEventListener('resize', this.updateMarkerPositions);
     },
-    handlePalletStorageClick(area) {
+    handlePalletStorageClick(area, title) {
       this.currentStorageArea = area;
+      this.currentStorageTitle = title; // 设置抽屉标题
       // 打开抽屉前重新查询数据
       this.loadPalletStorageByArea(area);
       this.palletStorageDrawerVisible = true;
@@ -1951,41 +1958,6 @@ export default {
     height: 100%;
     overflow-y: auto;
 
-    .area-tabs {
-      display: flex;
-      margin-bottom: 20px;
-      background: rgba(30, 42, 56, 0.5);
-      border-radius: 8px;
-      overflow: hidden;
-
-      .area-tab {
-        flex: 1;
-        text-align: center;
-        padding: 12px;
-        color: rgba(255, 255, 255, 0.7);
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-weight: 500;
-
-        &:hover {
-          background: rgba(64, 158, 255, 0.1);
-          color: rgba(255, 255, 255, 0.9);
-        }
-
-        &.active {
-          background: rgba(64, 158, 255, 0.2);
-          color: #409eff;
-          box-shadow: inset 0 -2px 0 #409eff;
-        }
-      }
-
-      .refresh-button {
-        display: flex;
-        align-items: center;
-        padding: 0 10px;
-      }
-    }
-
     .storage-card {
       background: rgba(30, 42, 56, 0.95);
       border: 1px solid rgba(64, 158, 255, 0.3);
@@ -2075,9 +2047,23 @@ export default {
   :deep(.storage-drawer .el-drawer__header) {
     margin-bottom: 0;
     padding: 16px 20px;
-    color: #fff;
-    font-size: 18px;
+    /* color: #fff; */ /* 由内部 span 控制颜色 */
+    /* font-size: 18px; */ /* 由内部 span 控制字体大小 */
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    /* Element UI 默认 header 是 flex, align-items: center */
+  }
+
+  .drawer-title-container {
+    display: flex;
+    align-items: center;
+    width: 100%; /* 占据整个头部宽度 */
+    color: #fff; /* 保持原有标题颜色 */
+    font-size: 18px; /* 保持原有标题字体大小 */
+  }
+
+  .title-refresh-button {
+    /* 根据需要调整按钮与标题的间距 */
+    margin-left: 10px;
   }
 
   :deep(.storage-drawer .el-drawer__close-btn) {
