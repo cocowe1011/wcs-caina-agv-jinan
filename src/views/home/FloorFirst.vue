@@ -406,7 +406,7 @@
           :class="{ 'can-move': item.trayInfo }"
         >
           <div class="storage-card-header">
-            <span
+            <span v-if="currentStorageTitle !== 'AGV2-2队列'"
               >位置 {{ item.queueName + item.queueNum
               }}<el-tag
                 v-if="item.trayStatus === '0'"
@@ -436,7 +436,11 @@
                 >已在缓存区取货，正往运往目的地</el-tag
               ></span
             >
-            <div class="card-actions">
+            <span v-else>队列序号：{{ index + 1 }}</span>
+            <div
+              class="card-actions"
+              v-if="currentStorageTitle !== 'AGV2-2队列'"
+            >
               <el-button
                 v-if="item.trayInfo"
                 type="text"
@@ -541,6 +545,7 @@ export default {
   name: 'FloorFirst',
   data() {
     return {
+      pollingTimerCtoAGV22: null, // 定时器ID，用于C区到AGV2-2的托盘移动轮询
       currentStorageTitle: '', // 新增：用于抽屉标题
       visibleArmPanels: [], // 当前显示的机械臂面板ID列表
       palletStorageDrawerVisible: false,
@@ -796,6 +801,7 @@ export default {
   },
   mounted() {
     this.initializeMarkers();
+    this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
     // ipcRenderer.on('receivedMsg', (event, values, values2) => {
     //   // 使用位运算优化赋值
     //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
@@ -916,6 +922,7 @@ export default {
     },
     beforeDestroy() {
       window.removeEventListener('resize', this.updateMarkerPositions);
+      this.stopPalletMovePolling(); // 组件销毁前停止轮询
     },
     handlePalletStorageClick(area, title) {
       this.currentStorageArea = area;
@@ -1278,6 +1285,65 @@ export default {
       //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
       //   return '';
       // }
+    },
+    startPalletMovePolling() {
+      if (this.pollingTimerCtoAGV22) {
+        clearInterval(this.pollingTimerCtoAGV22);
+      }
+      // 每3秒轮询一次，并立即执行一次
+      this.pollForPalletsToMove();
+      this.pollingTimerCtoAGV22 = setInterval(this.pollForPalletsToMove, 3000);
+      this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已启动。');
+    },
+
+    stopPalletMovePolling() {
+      if (this.pollingTimerCtoAGV22) {
+        clearInterval(this.pollingTimerCtoAGV22);
+        this.pollingTimerCtoAGV22 = null;
+        this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已停止。');
+      }
+    },
+    // 轮询C区有没有能够移到AGV2-2队列的托盘
+    pollForPalletsToMove() {
+      HttpUtil.post('/queue_info/queryQueueList', {
+        queueName: 'C',
+        trayStatus: '5'
+      }).then((res) => {
+        if (res && res.data.length > 0) {
+          this.insertPalletToAGV22(res.data);
+        }
+      });
+    },
+    // 将托盘插入AGV2-2队列
+    insertPalletToAGV22(pallets) {
+      // pallets按照元素updateTime正序排序，pallets长度是大于等于一的
+      pallets.sort((a, b) => a.updateTime - b.updateTime);
+      // 取第一个元素
+      const firstPallet = pallets[0];
+      // 调用入库接口
+      HttpUtil.post('/queue_info/updateAgv22', firstPallet)
+        .then((res) => {
+          if (res.data == 1) {
+            // 给PLC写条码数据
+            ipcRenderer.send(
+              'writeValuesToPLC',
+              'DBB120',
+              firstPallet.trayInfo
+            );
+            this.addLog(
+              `收到AGV放货消息，托盘${firstPallet.trayInfo}已进入AGV2-2队列，已给PLC发送条码数据。`
+            );
+          } else {
+            this.addLog(
+              `托盘${firstPallet.trayInfo}进入AGV2-2队列失败，请检查。`
+            );
+          }
+        })
+        .catch((err) => {
+          this.addLog(
+            `托盘${firstPallet.trayInfo}进入AGV2-2队列失败，请检查。${err}`
+          );
+        });
     }
   }
 };
