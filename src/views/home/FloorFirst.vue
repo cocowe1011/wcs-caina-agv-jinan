@@ -407,18 +407,28 @@
                 v-if="item.trayStatus === '0'"
                 size="small"
                 style="margin-left: 15px"
-                >托盘送往缓存区中</el-tag
+                >在2800等待AGV取货</el-tag
               ><el-tag
                 v-if="item.trayStatus === '1'"
                 type="success"
                 size="small"
                 style="margin-left: 15px"
-                >托盘已送至缓存区</el-tag
+                >已在2800取货，正往缓存区运送</el-tag
               ><el-tag
                 v-if="item.trayStatus === '2'"
                 size="small"
                 style="margin-left: 15px"
-                >托盘送往目的地中</el-tag
+                >已送至2楼缓存区</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '3'"
+                size="small"
+                style="margin-left: 15px"
+                >在缓存区等待AGV取货</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '4' || item.trayStatus === '5'"
+                size="small"
+                style="margin-left: 15px"
+                >已在缓存区取货，正往运往目的地</el-tag
               ></span
             >
             <div class="card-actions">
@@ -999,9 +1009,8 @@ export default {
             this.addLog(`读取托盘成功：${JSON.stringify(res.data)}`);
             this.scanInfo.mudidi = res.data[0].mudidi;
             this.scanInfo.descrC = res.data[0].descrC;
-            // 根据托盘信息给AGV小车发送指令
-            // 直接把托盘信息写入数据库-先写死测试
-            this.addTrayToQueue(trayCode);
+            // 处理扫码后托盘逻辑
+            this.dealScanCode(trayCode);
           } else {
             // 没查询到货物信息，直接报警
             this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
@@ -1013,37 +1022,43 @@ export default {
           this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
         });
     },
-    addTrayToQueue(trayCode) {
+    dealScanCode(trayCode) {
       // 判断目的地-先不判断，先直接写死进入C队列
       // 查询C队列托盘情况，查找第一个空闲的托盘位置
       const params = {
         queueName: 'C'
       };
       HttpUtil.post('/queue_info/queryQueueList', params)
-        .then((res) => {
+        .then(async (res) => {
           if (res.data && res.data.length > 0) {
             // 查找第一个空闲的托盘位置
             const emptyPosition = res.data.find(
               (item) => item.trayInfo === null || item.trayInfo === ''
             );
             if (emptyPosition) {
-              // 更新托盘信息
-              const param = {
-                id: emptyPosition.id,
-                trayInfo: trayCode,
-                trayStatus: 1
-              };
-              HttpUtil.post('/queue_info/update', param)
-                .then(() => {
-                  this.$message.success('托盘已入库');
-                  this.addLog(
-                    `托盘已入库：${trayCode}, 缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}`
-                  );
-                })
-                .catch((err) => {
-                  this.$message.error('托盘入库失败，请重试');
-                  this.addLog(`托盘入库失败：${trayCode},${err}`);
-                });
+              // 说明有空缓存位置
+              // 根据托盘信息给AGV小车发送指令
+              const robotTaskCode = await this.sendAgvCommand(1, 2, 3);
+              if (robotTaskCode !== '') {
+                // 更新托盘信息
+                const param = {
+                  id: emptyPosition.id,
+                  trayInfo: trayCode,
+                  trayStatus: '0',
+                  robotTaskCode
+                };
+                HttpUtil.post('/queue_info/update', param)
+                  .then(() => {
+                    this.$message.success('托盘已入库');
+                    this.addLog(
+                      `托盘已入库：${trayCode}, 缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}`
+                    );
+                  })
+                  .catch((err) => {
+                    this.$message.error('托盘入库失败，请重试');
+                    this.addLog(`托盘入库失败：${trayCode},${err}`);
+                  });
+              }
             } else {
               this.$message.error('缓存区没有空闲位置');
               this.addLog(`${trayCode} 托盘入库失败，缓存区没有空闲位置`);
@@ -1200,32 +1215,62 @@ export default {
         this.addLog('AGV调度已停止(循环)');
       }
     },
-    sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
+    async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
+      return Date.now().toString();
       // 组装入参
-      const params = {
-        taskType: taskType,
-        targetRoute: [
-          {
-            type: 'SITE',
-            code: fromSiteCode
-          },
-          {
-            type: 'SITE',
-            code: toSiteCode
-          }
-        ]
-      };
-      this.addLog(
-        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      );
-      // 发送AGV指令
-      HttpUtilAGV.post('/rcs/rtas/api/robot/controller/task/submit', params)
-        .then((res) => {
-          console.log(res);
-        })
-        .catch((err) => {
-          console.error('发送AGV指令失败:', err);
-        });
+      // const params = {
+      //   taskType: taskType,
+      //   targetRoute: [
+      //     {
+      //       type: 'SITE',
+      //       code: fromSiteCode
+      //     },
+      //     {
+      //       type: 'SITE',
+      //       code: toSiteCode
+      //     }
+      //   ]
+      // };
+      // this.addLog(
+      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      // );
+      // try {
+      //   // 发送AGV指令
+      //   const res = await HttpUtilAGV.post(
+      //     '/rcs/rtas/api/robot/controller/task/submit',
+      //     params
+      //   );
+      //   if (res.code === 'SUCCESS') {
+      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+      //     // 成功时返回robotTaskCode
+      //     return res.data.robotTaskCode;
+      //   } else {
+      //     // 处理各种错误类型
+      //     let errorMsg = '';
+      //     switch (res.errorCode) {
+      //       case 'Err_TaskTypeNotSupport':
+      //         errorMsg = '任务类型不支持';
+      //         break;
+      //       case 'Err_RobotGroupsNotMatch':
+      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+      //         break;
+      //       case 'Err_RobotCodeNotMatch':
+      //         errorMsg = '机器人编号与任务不匹配，无法调度';
+      //         break;
+      //       case 'Err_TargetRouteError':
+      //         errorMsg = '任务路径参数有误';
+      //         break;
+      //       default:
+      //         errorMsg = res.message || '未知错误';
+      //     }
+      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
+      //     return '';
+      //   }
+      // } catch (err) {
+      //   console.error('发送AGV指令失败:', err);
+      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+      //   return '';
+      // }
     }
   }
 };
