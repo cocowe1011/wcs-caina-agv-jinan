@@ -921,11 +921,11 @@ export default {
     // });
   },
   watch: {
-    // 2800接货处条码
-    twoEightHundredPalletCode: {
+    // 监听agvScheduleCondition.bit0,
+    'agvScheduleCondition.bit0': {
       async handler(newVal) {
-        if (newVal !== '' && this.agvScheduleCondition.bit0 === '1') {
-          this.addLog(`2800接货处扫码数据：${newVal}`);
+        if (newVal === '1') {
+          this.addLog(`2800接货处扫码数据：${this.twoEightHundredPalletCode}`);
           // 自动触发AGV运输任务，从2800到C区缓存位
           this.getTrayInfo(this.twoEightHundredPalletCode);
         }
@@ -933,7 +933,7 @@ export default {
     },
     // 监听 agvScheduleCondition.bit5，如果变为1，则出发一段逻辑，我自己写
     'agvScheduleCondition.bit5': {
-      handler(newVal) {
+      async handler(newVal) {
         if (newVal === '1') {
           this.addLog('检测到一楼提升机出口有货需AGV接走');
           // 自动触发AGV运输任务，从AGV1-1到C区缓存位
@@ -1354,10 +1354,10 @@ export default {
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
-      // return Date.now().toString();
       // this.addLog(
       //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       // );
+      // return Date.now().toString();
       // 组装入参
       const params = {
         taskType: taskType,
