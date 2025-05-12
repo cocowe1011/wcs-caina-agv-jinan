@@ -642,6 +642,8 @@ export default {
         B: [],
         C: []
       },
+      // 跟踪DBW106的当前值
+      currentDBW106Value: 0,
       mechanicalArms: [
         {
           name: 'A1',
@@ -1457,6 +1459,29 @@ export default {
               'DBB120',
               firstPallet.trayInfo
             );
+            // 1秒后发送第二个命令
+            setTimeout(() => {
+              // 设置第2位为1，保留其他位
+              // 修改位操作，与读取时保持一致，使用第10位（对应bit2）
+              this.currentDBW106Value |= 1 << 10; // 按位或，设置第10位为1
+              ipcRenderer.send(
+                'writeValuesToPLC',
+                'DBW106',
+                this.currentDBW106Value
+              );
+
+              // 再过1秒后发送第三个命令
+              setTimeout(() => {
+                // 清除第2位为0，保留其他位
+                // 修改位操作，与读取时保持一致，使用第10位（对应bit2）
+                this.currentDBW106Value &= ~(1 << 10); // 按位与上第10位的反码，清除第10位
+                ipcRenderer.send(
+                  'writeValuesToPLC',
+                  'DBW106',
+                  this.currentDBW106Value
+                );
+              }, 1000);
+            }, 1000);
             this.addLog(
               `收到AGV放货消息，托盘${firstPallet.trayInfo}已进入AGV2-2队列，已给PLC发送条码数据。`
             );
@@ -1522,20 +1547,18 @@ export default {
 
     sendPalletToDestination(item, destination) {
       // 根据托盘信息给AGV小车发送指令
-      this.addLog(`正在发送托盘 ${item.trayInfo} 至 ${destination}...`);
+      this.addLog(
+        `正在发送托盘 ${item.trayInfo} 至 ${destination}...先途径AGV2-2...`
+      );
 
       // 显示加载状态
       this.$set(item, 'showSendPanel', false);
-
-      // 这里可以根据目的地调用相应的AGV指令
-      // 如果目的地是AGV站点，则使用AGV代码映射表中的代码
-      const toSiteCode = this.agvCodeMap[destination] || destination;
 
       // 调用发送AGV指令方法，确定任务类型和起点终点
       const taskType = 'PF-FMR-COMMON-JH2'; // 假设是从缓存区到输送线
       const fromSiteCode = item.queueName + item.queueNum;
 
-      this.sendAgvCommand(taskType, fromSiteCode, toSiteCode)
+      this.sendAgvCommand(taskType, fromSiteCode, '201')
         .then((robotTaskCode) => {
           if (robotTaskCode) {
             // 更新托盘状态为正在发送中
