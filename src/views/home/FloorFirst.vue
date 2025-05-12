@@ -599,6 +599,25 @@
             </el-form>
           </div>
         </div>
+
+        <!-- 添加AGV调度条件模拟 -->
+        <div class="test-section">
+          <h3>AGV调度条件模拟</h3>
+          <div class="test-form">
+            <el-form size="small">
+              <el-form-item>
+                <el-button
+                  type="warning"
+                  size="small"
+                  @click="simulateAGV1Signal"
+                  :loading="agvSignalLoading"
+                >
+                  模拟一楼提升机出口有货信号
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
       </div>
     </el-dialog>
   </div>
@@ -799,7 +818,8 @@ export default {
         'AGV1-1': '202',
         'AGV3-1': '302'
       },
-      twoEightHundredPalletTestCode: ''
+      twoEightHundredPalletTestCode: '',
+      agvSignalLoading: false
     };
   },
   computed: {
@@ -910,6 +930,16 @@ export default {
           this.getTrayInfo(this.twoEightHundredPalletCode);
         }
       }
+    },
+    // 监听 agvScheduleCondition.bit5，如果变为1，则出发一段逻辑，我自己写
+    'agvScheduleCondition.bit5': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('检测到一楼提升机出口有货需AGV接走');
+          // 自动触发AGV运输任务，从AGV1-1到C区缓存位
+          this.handleAGV1ToStorage();
+        }
+      }
     }
   },
   methods: {
@@ -919,6 +949,52 @@ export default {
         1: '处理中'
       };
       return statusTexts[status];
+    },
+    // 处理一楼提升机出口有货需AGV接走的方法
+    async handleAGV1ToStorage() {
+      try {
+        // 查询C队列托盘情况，查找第一个空闲的托盘位置
+        const params = {
+          queueName: 'AGV2-2'
+        };
+        const res = await HttpUtil.post('/queue_info/queryQueueList', params);
+
+        if (res.data && res.data.length > 0) {
+          // 输出日志
+          this.addLog(`AGV2-2托盘出库信息：${JSON.stringify(res.data)}`);
+          // 调用AGV过来运货
+          await this.sendAgvCommand(
+            'PF-FMR-COMMON-JH-?',
+            '202',
+            res.data[0].targetPosition
+          );
+          // 移除本托盘
+          await this.deleteAgv22Pallet(res.data[0]);
+        }
+      } catch (err) {
+        console.error('处理一楼提升机出口货物失败:', err);
+        this.addLog(
+          `处理一楼提升机出口货物失败: ${err.message || '未知错误'}`,
+          'alarm'
+        );
+      }
+    },
+    // 移除托盘
+    async deleteAgv22Pallet(item) {
+      const params = {
+        id: item.id
+      };
+      await HttpUtil.post('/queue_info/delete', params)
+        .then((res) => {
+          if (res.data == 1) {
+            this.addLog(`AGV2-2托盘出库成功：${item.trayInfo}`);
+          } else {
+            this.addLog(`AGV2-2托盘出库失败：${item.trayInfo}`);
+          }
+        })
+        .catch((err) => {
+          this.addLog(`AGV2-2托盘出库失败：${err.message}`);
+        });
     },
     initializeMarkers() {
       this.$nextTick(() => {
@@ -1279,6 +1355,9 @@ export default {
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
       // return Date.now().toString();
+      // this.addLog(
+      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      // );
       // 组装入参
       const params = {
         taskType: taskType,
@@ -1462,20 +1541,22 @@ export default {
             // 更新托盘状态为正在发送中
             const param = {
               id: item.id,
-              trayStatus: '4', // 状态更新为：已在缓存区取货，正运往目的地
+              trayStatus: '3', // -在缓存区等待AGV取货
               robotTaskCode,
               targetPosition: destination // 保存目的地信息
             };
 
             HttpUtil.post('/queue_info/update', param)
-              .then(() => {
-                this.$message.success(`托盘已发送至 ${destination}`);
-                this.addLog(`托盘 ${item.trayInfo} 已发送至 ${destination}`);
-                // 更新本地item的状态
-                this.$set(item, 'trayStatus', '4');
-                this.$set(item, 'targetPosition', destination);
-                // 重新加载当前区域数据
-                this.loadPalletStorageByArea(this.currentStorageArea);
+              .then((res) => {
+                if (res.data == 1) {
+                  this.$message.success(`托盘已发送至 ${destination}`);
+                  this.addLog(`托盘 ${item.trayInfo} 已发送至 ${destination}`);
+                  // 更新本地item的状态
+                  this.$set(item, 'trayStatus', '3');
+                  this.$set(item, 'targetPosition', destination);
+                  // 重新加载当前区域数据
+                  this.loadPalletStorageByArea(this.currentStorageArea);
+                }
               })
               .catch((err) => {
                 this.$message.error('托盘状态更新失败，请重试');
@@ -1494,6 +1575,19 @@ export default {
           // 恢复发送面板状态
           this.$set(item, 'showSendPanel', true);
         });
+    },
+    simulateAGV1Signal() {
+      this.agvSignalLoading = true;
+      // 设置bit5为1，触发监听器
+      this.agvScheduleCondition.bit5 = '1';
+      this.addLog('模拟一楼提升机出口有货信号已发送');
+
+      // 1秒后恢复为0
+      setTimeout(() => {
+        this.agvScheduleCondition.bit5 = '0';
+        this.agvSignalLoading = false;
+        this.addLog('模拟一楼提升机出口有货信号已恢复');
+      }, 1000);
     }
   }
 };
