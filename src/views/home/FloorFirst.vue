@@ -1089,14 +1089,21 @@ export default {
       HttpUtil.post('/queue_info/queryQueueList', params)
         .then(async (res) => {
           if (res.data && res.data.length > 0) {
-            // 查找第一个空闲的托盘位置
+            // 查找第一个空闲的托盘位置，目前只检索queueNum在6-20的托盘
             const emptyPosition = res.data.find(
-              (item) => item.trayInfo === null || item.trayInfo === ''
+              (item) =>
+                (item.trayInfo === null || item.trayInfo === '') &&
+                item.queueNum >= 6 &&
+                item.queueNum <= 20
             );
             if (emptyPosition) {
               // 说明有空缓存位置
               // 根据托盘信息给AGV小车发送指令
-              const robotTaskCode = await this.sendAgvCommand(1, 2, 3);
+              const robotTaskCode = await this.sendAgvCommand(
+                'PF-FMR-COMMON-JH1',
+                '102',
+                emptyPosition.queueName + emptyPosition.queueNum
+              );
               if (robotTaskCode !== '') {
                 // 更新托盘信息
                 const param = {
