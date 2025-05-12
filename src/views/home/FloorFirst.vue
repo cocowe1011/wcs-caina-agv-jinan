@@ -406,13 +406,14 @@
                 >在2800等待AGV取货</el-tag
               ><el-tag
                 v-if="item.trayStatus === '1'"
-                type="success"
+                type="warning"
                 size="small"
                 style="margin-left: 15px"
                 >已在2800取货，正往缓存区运送</el-tag
               ><el-tag
                 v-if="item.trayStatus === '2'"
                 size="small"
+                type="success"
                 style="margin-left: 15px"
                 >已送至2楼缓存区</el-tag
               ><el-tag
@@ -423,6 +424,7 @@
               ><el-tag
                 v-if="item.trayStatus === '4' || item.trayStatus === '5'"
                 size="small"
+                type="warning"
                 style="margin-left: 15px"
                 >已在缓存区取货，正往运往目的地</el-tag
               ></span
@@ -454,7 +456,7 @@
                   <div class="storage-info-row product-desc">
                     <span class="label">产品描述：</span>
                     <span class="value">{{
-                      item.productDesc || '暂无描述'
+                      item.trayInfoAdd || '暂无描述'
                     }}</span>
                   </div>
                 </div>
@@ -495,14 +497,23 @@
                     size="mini"
                     class="target-input"
                   ></el-autocomplete>
-                  <el-button
-                    type="primary"
-                    size="mini"
-                    @click="handleExecutePallet(item)"
-                  >
-                    <i class="el-icon-position"></i>
-                    发送
-                  </el-button>
+                  <div class="action-buttons">
+                    <el-button
+                      type="primary"
+                      size="mini"
+                      @click="handleExecutePallet(item)"
+                    >
+                      <i class="el-icon-position"></i>
+                      发送
+                    </el-button>
+                    <el-button
+                      size="mini"
+                      style="margin-left: 0px"
+                      @click="item.showSendPanel = false"
+                    >
+                      取消
+                    </el-button>
+                  </div>
                 </div>
 
                 <!-- 状态为3、4、5时显示发送状态 -->
@@ -1057,7 +1068,7 @@ export default {
             this.scanInfo.mudidi = res.data[0].mudidi;
             this.scanInfo.descrC = res.data[0].descrC;
             // 处理扫码后托盘逻辑
-            this.dealScanCode(trayCode);
+            this.dealScanCode(trayCode, res.data[0].descrC);
           } else {
             // 没查询到货物信息，直接报警
             this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
@@ -1069,7 +1080,7 @@ export default {
           this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
         });
     },
-    dealScanCode(trayCode) {
+    dealScanCode(trayCode, descrC) {
       // 判断目的地-先不判断，先直接写死进入C队列
       // 查询C队列托盘情况，查找第一个空闲的托盘位置
       const params = {
@@ -1092,7 +1103,8 @@ export default {
                   id: emptyPosition.id,
                   trayInfo: trayCode,
                   trayStatus: '0',
-                  robotTaskCode
+                  robotTaskCode,
+                  trayInfoAdd: descrC
                 };
                 HttpUtil.post('/queue_info/update', param)
                   .then(() => {
@@ -1259,61 +1271,61 @@ export default {
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
-      return Date.now().toString();
+      // return Date.now().toString();
       // 组装入参
-      // const params = {
-      //   taskType: taskType,
-      //   targetRoute: [
-      //     {
-      //       type: 'SITE',
-      //       code: fromSiteCode
-      //     },
-      //     {
-      //       type: 'SITE',
-      //       code: toSiteCode
-      //     }
-      //   ]
-      // };
-      // this.addLog(
-      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      // );
-      // try {
-      //   // 发送AGV指令
-      //   const res = await HttpUtilAGV.post(
-      //     '/rcs/rtas/api/robot/controller/task/submit',
-      //     params
-      //   );
-      //   if (res.code === 'SUCCESS') {
-      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-      //     // 成功时返回robotTaskCode
-      //     return res.data.robotTaskCode;
-      //   } else {
-      //     // 处理各种错误类型
-      //     let errorMsg = '';
-      //     switch (res.errorCode) {
-      //       case 'Err_TaskTypeNotSupport':
-      //         errorMsg = '任务类型不支持';
-      //         break;
-      //       case 'Err_RobotGroupsNotMatch':
-      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_RobotCodeNotMatch':
-      //         errorMsg = '机器人编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_TargetRouteError':
-      //         errorMsg = '任务路径参数有误';
-      //         break;
-      //       default:
-      //         errorMsg = res.message || '未知错误';
-      //     }
-      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
-      //     return '';
-      //   }
-      // } catch (err) {
-      //   console.error('发送AGV指令失败:', err);
-      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-      //   return '';
-      // }
+      const params = {
+        taskType: taskType,
+        targetRoute: [
+          {
+            type: 'SITE',
+            code: fromSiteCode
+          },
+          {
+            type: 'SITE',
+            code: toSiteCode
+          }
+        ]
+      };
+      this.addLog(
+        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/submit',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodeNotMatch':
+              errorMsg = '机器人编号与任务不匹配，无法调度';
+              break;
+            case 'Err_TargetRouteError':
+              errorMsg = '任务路径参数有误';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     },
     startPalletMovePolling() {
       if (this.pollingTimerCtoAGV22) {
@@ -2284,6 +2296,18 @@ export default {
 
           .target-input {
             width: 90px;
+          }
+
+          .action-buttons {
+            display: flex;
+            gap: 6px;
+            width: 90px;
+            justify-content: space-between;
+
+            :deep(.el-button) {
+              padding: 5px 4px;
+              flex: 1;
+            }
           }
         }
       }
