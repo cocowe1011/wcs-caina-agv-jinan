@@ -430,19 +430,9 @@
             <span v-else>队列序号：{{ index + 1 }}</span>
             <div
               class="card-actions"
-              v-if="currentStorageTitle !== 'AGV2-2队列'"
+              v-if="currentStorageTitle !== 'AGV2-2队列' && item.trayInfo"
             >
               <el-button
-                v-if="item.trayInfo"
-                type="text"
-                size="mini"
-                @click="handleExecutePallet(item)"
-              >
-                <i class="el-icon-position"></i>
-                发送
-              </el-button>
-              <el-button
-                v-else
                 type="text"
                 size="mini"
                 class="danger-button"
@@ -455,9 +445,85 @@
           </div>
           <div class="storage-card-content">
             <template v-if="item.trayInfo">
-              <div class="storage-info">
-                <span class="label">托盘码：</span>
-                <span class="value">{{ item.trayInfo }}</span>
+              <div class="storage-info-container">
+                <div class="storage-info">
+                  <div class="storage-info-row">
+                    <span class="label">托盘码：</span>
+                    <span class="value">{{ item.trayInfo }}</span>
+                  </div>
+                  <div class="storage-info-row product-desc">
+                    <span class="label">产品描述：</span>
+                    <span class="value">{{
+                      item.productDesc || '暂无描述'
+                    }}</span>
+                  </div>
+                </div>
+
+                <!-- 状态为2时显示发送图标 -->
+                <div
+                  v-if="
+                    item.trayStatus === '2' &&
+                    currentStorageTitle !== 'AGV2-2队列'
+                  "
+                  class="send-action-icon"
+                >
+                  <el-button
+                    type="text"
+                    @click="item.showSendPanel = true"
+                    v-if="!item.showSendPanel"
+                  >
+                    <i
+                      class="el-icon-position"
+                      style="font-size: 18px; color: #409eff"
+                    ></i>
+                  </el-button>
+                </div>
+
+                <!-- 状态为2且点击了发送图标时显示发送面板 -->
+                <div
+                  class="send-actions"
+                  v-if="
+                    item.trayStatus === '2' &&
+                    item.showSendPanel &&
+                    currentStorageTitle !== 'AGV2-2队列'
+                  "
+                >
+                  <el-autocomplete
+                    v-model="item.targetPosition"
+                    :fetch-suggestions="querySearchEndAsync"
+                    placeholder="发送至"
+                    size="mini"
+                    class="target-input"
+                  ></el-autocomplete>
+                  <el-button
+                    type="primary"
+                    size="mini"
+                    @click="handleExecutePallet(item)"
+                  >
+                    <i class="el-icon-position"></i>
+                    发送
+                  </el-button>
+                </div>
+
+                <!-- 状态为3、4、5时显示发送状态 -->
+                <div
+                  class="sending-status"
+                  v-if="
+                    ['3', '4', '5'].includes(item.trayStatus) &&
+                    currentStorageTitle !== 'AGV2-2队列'
+                  "
+                >
+                  <div class="status-text">
+                    <i class="el-icon-loading"></i>
+                    <span>正在发送中</span>
+                  </div>
+                  <div class="destination">
+                    <span class="label">目的地：</span>
+                    <span class="value">{{
+                      item.targetPosition || '未知'
+                    }}</span>
+                  </div>
+                </div>
               </div>
             </template>
             <template v-else>
@@ -903,8 +969,15 @@ export default {
       HttpUtil.post('/queue_info/queryQueueList', params)
         .then((res) => {
           if (res.data && Array.isArray(res.data)) {
+            // 为每个托盘项添加showSendPanel属性
+            const dataWithSendPanel = res.data.map((item) => {
+              return {
+                ...item,
+                showSendPanel: false
+              };
+            });
             // 如果API返回的数据已经是格式化好的，直接使用
-            this.$set(this.palletStorageAreas, area, res.data);
+            this.$set(this.palletStorageAreas, area, dataWithSendPanel);
           } else {
             // 如果API返回的数据需要格式化，进行处理
             this.$message.warning(`获取${area}区托盘数据格式不正确`);
@@ -1186,61 +1259,61 @@ export default {
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
-      // return Date.now().toString();
+      return Date.now().toString();
       // 组装入参
-      const params = {
-        taskType: taskType,
-        targetRoute: [
-          {
-            type: 'SITE',
-            code: fromSiteCode
-          },
-          {
-            type: 'SITE',
-            code: toSiteCode
-          }
-        ]
-      };
-      this.addLog(
-        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      );
-      try {
-        // 发送AGV指令
-        const res = await HttpUtilAGV.post(
-          '/rcs/rtas/api/robot/controller/task/submit',
-          params
-        );
-        if (res.code === 'SUCCESS') {
-          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-          // 成功时返回robotTaskCode
-          return res.data.robotTaskCode;
-        } else {
-          // 处理各种错误类型
-          let errorMsg = '';
-          switch (res.errorCode) {
-            case 'Err_TaskTypeNotSupport':
-              errorMsg = '任务类型不支持';
-              break;
-            case 'Err_RobotGroupsNotMatch':
-              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
-              break;
-            case 'Err_RobotCodeNotMatch':
-              errorMsg = '机器人编号与任务不匹配，无法调度';
-              break;
-            case 'Err_TargetRouteError':
-              errorMsg = '任务路径参数有误';
-              break;
-            default:
-              errorMsg = res.message || '未知错误';
-          }
-          this.addLog(`AGV指令发送失败: ${errorMsg}`);
-          return '';
-        }
-      } catch (err) {
-        console.error('发送AGV指令失败:', err);
-        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-        return '';
-      }
+      // const params = {
+      //   taskType: taskType,
+      //   targetRoute: [
+      //     {
+      //       type: 'SITE',
+      //       code: fromSiteCode
+      //     },
+      //     {
+      //       type: 'SITE',
+      //       code: toSiteCode
+      //     }
+      //   ]
+      // };
+      // this.addLog(
+      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      // );
+      // try {
+      //   // 发送AGV指令
+      //   const res = await HttpUtilAGV.post(
+      //     '/rcs/rtas/api/robot/controller/task/submit',
+      //     params
+      //   );
+      //   if (res.code === 'SUCCESS') {
+      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+      //     // 成功时返回robotTaskCode
+      //     return res.data.robotTaskCode;
+      //   } else {
+      //     // 处理各种错误类型
+      //     let errorMsg = '';
+      //     switch (res.errorCode) {
+      //       case 'Err_TaskTypeNotSupport':
+      //         errorMsg = '任务类型不支持';
+      //         break;
+      //       case 'Err_RobotGroupsNotMatch':
+      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+      //         break;
+      //       case 'Err_RobotCodeNotMatch':
+      //         errorMsg = '机器人编号与任务不匹配，无法调度';
+      //         break;
+      //       case 'Err_TargetRouteError':
+      //         errorMsg = '任务路径参数有误';
+      //         break;
+      //       default:
+      //         errorMsg = res.message || '未知错误';
+      //     }
+      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
+      //     return '';
+      //   }
+      // } catch (err) {
+      //   console.error('发送AGV指令失败:', err);
+      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+      //   return '';
+      // }
     },
     startPalletMovePolling() {
       if (this.pollingTimerCtoAGV22) {
@@ -1325,6 +1398,83 @@ export default {
       return (item) => {
         return item.value.toLowerCase().indexOf(queryString.toLowerCase()) > 0;
       };
+    },
+    handleExecutePallet(item) {
+      if (!item.targetPosition) {
+        this.$message.warning('请选择目的地');
+        return;
+      }
+
+      // 发送托盘至选定目的地的逻辑
+      this.$confirm(
+        `确认将托盘 ${item.trayInfo} 发送至 ${item.targetPosition} 吗？`,
+        '提示',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+        .then(() => {
+          // 执行发送逻辑
+          this.sendPalletToDestination(item, item.targetPosition);
+        })
+        .catch(() => {});
+    },
+
+    sendPalletToDestination(item, destination) {
+      // 根据托盘信息给AGV小车发送指令
+      this.addLog(`正在发送托盘 ${item.trayInfo} 至 ${destination}...`);
+
+      // 显示加载状态
+      this.$set(item, 'showSendPanel', false);
+
+      // 这里可以根据目的地调用相应的AGV指令
+      // 如果目的地是AGV站点，则使用AGV代码映射表中的代码
+      const toSiteCode = this.agvCodeMap[destination] || destination;
+
+      // 调用发送AGV指令方法，确定任务类型和起点终点
+      const taskType = 'PF-FMR-COMMON-JH2'; // 假设是从缓存区到输送线
+      const fromSiteCode = item.queueName + item.queueNum;
+
+      this.sendAgvCommand(taskType, fromSiteCode, toSiteCode)
+        .then((robotTaskCode) => {
+          if (robotTaskCode) {
+            // 更新托盘状态为正在发送中
+            const param = {
+              id: item.id,
+              trayStatus: '4', // 状态更新为：已在缓存区取货，正运往目的地
+              robotTaskCode,
+              targetPosition: destination // 保存目的地信息
+            };
+
+            HttpUtil.post('/queue_info/update', param)
+              .then(() => {
+                this.$message.success(`托盘已发送至 ${destination}`);
+                this.addLog(`托盘 ${item.trayInfo} 已发送至 ${destination}`);
+                // 更新本地item的状态
+                this.$set(item, 'trayStatus', '4');
+                this.$set(item, 'targetPosition', destination);
+                // 重新加载当前区域数据
+                this.loadPalletStorageByArea(this.currentStorageArea);
+              })
+              .catch((err) => {
+                this.$message.error('托盘状态更新失败，请重试');
+                this.addLog(`托盘状态更新失败：${err}`);
+                // 恢复发送面板状态
+                this.$set(item, 'showSendPanel', true);
+              });
+          } else {
+            this.$message.error('AGV指令发送失败');
+            // 恢复发送面板状态
+            this.$set(item, 'showSendPanel', true);
+          }
+        })
+        .catch((err) => {
+          this.$message.error(`发送指令失败: ${err}`);
+          // 恢复发送面板状态
+          this.$set(item, 'showSendPanel', true);
+        });
     }
   }
 };
@@ -1485,10 +1635,6 @@ export default {
             }
             .agv-input {
               flex: 1;
-              //深度修改 .el-autocomplete-suggestion li 的样式
-              :deep(.el-autocomplete-suggestion li) {
-                font-size: 12px;
-              }
             }
           }
         }
@@ -2009,6 +2155,8 @@ export default {
         .card-actions {
           display: flex;
           gap: 8px;
+          align-items: center;
+
           :deep(.el-button--text) {
             color: #409eff;
             padding: 0;
@@ -2029,22 +2177,114 @@ export default {
       }
       .storage-card-content {
         padding: 16px;
-        .storage-info {
+
+        .storage-info-container {
           display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #fff;
-          .label {
-            color: rgba(255, 255, 255, 0.7);
+          justify-content: space-between;
+          align-items: flex-start;
+          width: 100%;
+          .storage-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            color: #fff;
+            min-width: 150px;
+
+            .storage-info-row {
+              display: flex;
+              gap: 8px;
+              align-items: flex-start;
+
+              &.product-desc {
+                .value {
+                  flex: 1;
+                  word-break: break-word;
+                  line-height: 1.4;
+                }
+              }
+            }
+
+            .label {
+              color: rgba(255, 255, 255, 0.7);
+              white-space: nowrap;
+            }
+
+            .value {
+              font-weight: 500;
+            }
           }
-          .value {
-            font-weight: 500;
+
+          .send-action-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+
+            .el-button {
+              width: 36px;
+              height: 36px;
+              padding: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: rgba(64, 158, 255, 0.1);
+              border-radius: 50%;
+              transition: all 0.3s;
+
+              &:hover {
+                background: rgba(64, 158, 255, 0.2);
+                transform: scale(1.1);
+              }
+            }
+          }
+
+          .sending-status {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+
+            .status-text {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              color: #e6a23c;
+              font-weight: 500;
+
+              i {
+                font-size: 16px;
+              }
+            }
+
+            .destination {
+              display: flex;
+              gap: 4px;
+              font-size: 12px;
+
+              .label {
+                color: rgba(255, 255, 255, 0.6);
+              }
+
+              .value {
+                color: #fff;
+              }
+            }
           }
         }
-
         .storage-info.empty {
           color: rgba(255, 255, 255, 0.5);
           font-style: italic;
+        }
+
+        .send-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+
+          .target-input {
+            width: 90px;
+          }
         }
       }
     }
