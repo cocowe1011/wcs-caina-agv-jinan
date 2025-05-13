@@ -429,7 +429,15 @@
                 >已在缓存区取货，正往运往目的地</el-tag
               ></span
             >
-            <span v-else>队列序号：{{ index + 1 }}</span>
+            <span v-else
+              >队列序号：{{ index + 1
+              }}<el-tag
+                v-if="item.trayStatus === '6'"
+                size="small"
+                style="margin-left: 15px"
+                >等待一楼AGV取货中</el-tag
+              ></span
+            >
             <div
               class="card-actions"
               v-if="currentStorageTitle !== 'AGV2-2队列' && item.trayInfo"
@@ -960,21 +968,44 @@ export default {
           queueName: 'AGV2-2'
         };
         const res = await HttpUtil.post('/queue_info/queryQueueList', params);
-
-        if (res.data && res.data.length > 0) {
+        // 把trayStatus 为5的托盘保留下来
+        const trayList = res.data.filter((item) => item.trayStatus === '5');
+        if (trayList && trayList.length > 0) {
           // 输出日志
-          this.addLog(`AGV2-2托盘出库信息：${JSON.stringify(res.data)}`);
+          this.addLog(`AGV2-2托盘出库信息：${JSON.stringify(trayList)}`);
           // 调用AGV过来运货
-          await this.sendAgvCommand(
-            'PF-FMR-COMMON-JH-?',
+          const robotTaskCode = await this.sendAgvCommand(
+            'PF-FMR-COMMON-JH4',
             '202',
-            res.data[0].targetPosition
+            trayList[0].targetPosition
           );
-          // 移除本托盘
-          await this.deleteAgv22Pallet(res.data[0]);
+          if (robotTaskCode !== '') {
+            // 更新托盘状态
+            const param = {
+              id: trayList[0].id,
+              trayStatus: '6',
+              robotTaskCode
+            };
+            await HttpUtil.post('/queue_info/update', param)
+              .then((resUpdate) => {
+                if (resUpdate.data == 1) {
+                  this.addLog(
+                    `已给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务`
+                  );
+                } else {
+                  this.addLog(
+                    `给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务失败`
+                  );
+                }
+              })
+              .catch((err) => {
+                this.addLog(
+                  `给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务失败：${err.message}`
+                );
+              });
+          }
         }
       } catch (err) {
-        console.error('处理一楼提升机出口货物失败:', err);
         this.addLog(
           `处理一楼提升机出口货物失败: ${err.message || '未知错误'}`,
           'alarm'
