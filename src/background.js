@@ -31,6 +31,18 @@ var appTray = null;
 let closeStatus = false;
 var conn = new nodes7();
 var pollingST = null;
+
+// 记录日志的辅助函数
+function logToFile(message) {
+  const timestamp = new Date().toLocaleString();
+  const logPath =
+    'D://wcs_temp_data/log/' +
+    new Date().toLocaleDateString().replaceAll('/', '-') +
+    'runlog.txt';
+  fs.appendFile(logPath, `[${timestamp}] ${message}\n`, (err) => {
+    if (err) console.error('Error writing to log file:', err);
+  });
+}
 // electron 开启热更新
 try {
   require('electron-reloader')(module, {});
@@ -192,14 +204,78 @@ app.on('ready', () => {
   }
   setAppTray();
   if (process.env.NODE_ENV === 'production') {
-    // 启动Java进程
-    spawn(path.join(__static, './jre', 'jre1.8.0_251', 'bin', 'java'), [
-      '-Xmx4096m',
-      '-Xms4096m',
-      '-Dfile.encoding=UTF-8',
-      '-jar',
-      path.join(__static, './jarlib', 'wcs-agv-jinan-middle-anxin.jar')
-    ]);
+    try {
+      const javaPath = path.join(
+        __static,
+        './jre',
+        'jre1.8.0_251',
+        'bin',
+        'java'
+      );
+      const jarPath = path.join(
+        __static,
+        './jarlib',
+        'wcs-agv-jinan-middle-anxin.jar'
+      );
+
+      // 优化的Java启动参数
+      const javaOpts = [
+        // 内存设置
+        '-Xmx4096m', // 最大堆内存
+        '-Xms4096m', // 初始堆内存
+        '-XX:MaxMetaspaceSize=512m', // 最大元空间大小
+        '-XX:MetaspaceSize=256m', // 初始元空间大小
+
+        // GC设置
+        '-XX:+UseG1GC', // 使用G1垃圾收集器
+        '-XX:MaxGCPauseMillis=200', // 最大GC停顿时间
+        '-XX:+HeapDumpOnOutOfMemoryError', // 内存溢出时导出堆转储
+        '-XX:HeapDumpPath=D://wcs_temp_data/dump', // 堆转储文件路径
+
+        // 性能优化
+        '-XX:+DisableExplicitGC', // 禁止显式GC调用
+        '-XX:+UseStringDeduplication', // 开启字符串去重
+        '-XX:+OptimizeStringConcat', // 优化字符串连接
+
+        // 监控和调试
+        '-XX:+PrintGCDetails', // 打印GC详细信息
+        '-XX:+PrintGCDateStamps', // 打印GC时间戳
+        '-Xloggc:D://wcs_temp_data/log/gc.log', // GC日志文件
+        '-XX:+HeapDumpBeforeFullGC', // Full GC前生成堆转储
+        '-XX:+PrintGCApplicationStoppedTime', // 打印应用暂停时间
+
+        // 错误处理
+        '-XX:+ExitOnOutOfMemoryError', // 发生OOM时退出
+        '-XX:ErrorFile=D://wcs_temp_data/log/hs_err_%p.log', // JVM错误日志
+        // 编码
+        '-Dfile.encoding=UTF-8',
+        // 应用参数
+        '-jar',
+        jarPath
+      ];
+      // 确保日志目录存在
+      const logDir = 'D://wcs_temp_data/log';
+      const dumpDir = 'D://wcs_temp_data/dump';
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+      if (!fs.existsSync(dumpDir)) {
+        fs.mkdirSync(dumpDir, { recursive: true });
+      }
+
+      logToFile(`启动Java进程，使用参数: ${javaOpts.join(' ')}`);
+      const process = spawn(javaPath, javaOpts);
+
+      process.on('error', (err) => {
+        logToFile(`Java程序启动错误: ${err.message}`);
+      });
+
+      process.on('exit', (code, signal) => {
+        logToFile(`Java程序退出，退出码: ${code}, 信号: ${signal}`);
+      });
+    } catch (error) {
+      logToFile(`Java程序启动异常: ${error.message}`);
+    }
   }
 
   // 开发者工具
@@ -220,7 +296,7 @@ app.on('ready', () => {
   // 定义自定义事件
   ipcMain.on('writeLogToLocal', (event, arg) => {
     fs.appendFile(
-      'D://css_temp_data/log/' +
+      'D://wcs_temp_data/log/' +
         (new Date().toLocaleDateString() + '.txt').replaceAll('/', '-'),
       arg + '\n',
       function (err) {}

@@ -1079,7 +1079,6 @@ export default {
     },
     // 加载指定区域的托盘存储数据
     loadPalletStorageByArea(area) {
-      this.$set(this.palletStorageAreas, area, []); // 清空当前区域数据，显示加载状态
       this.isRefreshing = true;
 
       const params = {
@@ -1099,6 +1098,7 @@ export default {
             // 如果API返回的数据已经是格式化好的，直接使用
             this.$set(this.palletStorageAreas, area, dataWithSendPanel);
           } else {
+            this.$set(this.palletStorageAreas, area, []); // 清空当前区域数据，显示加载状态
             // 如果API返回的数据需要格式化，进行处理
             this.$message.warning(`获取${area}区托盘数据格式不正确`);
           }
@@ -1106,6 +1106,7 @@ export default {
         .catch((err) => {
           console.error(`获取${area}区托盘数据失败:`, err);
           this.$message.error(`获取${area}区托盘数据失败`);
+          this.$set(this.palletStorageAreas, area, []); // 清空当前区域数据，显示加载状态
         })
         .finally(() => {
           this.isRefreshing = false;
@@ -1119,21 +1120,29 @@ export default {
       })
         .then(() => {
           // 调用API更新数据库中的托盘信息
-          HttpUtil.post('/pallet_storage/removePallet', {
-            area: this.currentStorageArea,
-            position: position.name,
-            palletCode: position.palletCode
+          HttpUtil.post('/queue_info/update', {
+            id: position.id,
+            trayInfo: '',
+            trayStatus: '',
+            robotTaskCode: '',
+            trayInfoAdd: '',
+            targetPosition: ''
           })
-            .then(() => {
-              // API调用成功后更新本地数据
-              position.palletCode = null;
-              this.$message.success('托盘已移除');
-              this.addLog(
-                `已从${this.currentStorageArea}区${position.name}移除托盘`
-              );
+            .then((res) => {
+              if (res.data == 1) {
+                this.addLog(
+                  `${position.trayInfo}已从${this.currentStorageArea}区${position.queueName}${position.queueNum}移除托盘`
+                );
+                // 重新查询
+                this.loadPalletStorageByArea(this.currentStorageArea);
+              } else {
+                this.addLog(
+                  `移除托盘失败：${position.queueName}${position.queueNum}`
+                );
+              }
             })
             .catch((err) => {
-              console.error('移除托盘失败:', err);
+              console.error(`${position.trayInfo}移除托盘失败:`, err);
               this.$message.error('移除托盘失败，请重试');
             });
         })
@@ -1177,7 +1186,7 @@ export default {
             this.scanInfo.mudidi = res.data[0].mudidi;
             this.scanInfo.descrC = res.data[0].descrC;
             // 处理扫码后托盘逻辑
-            this.dealScanCode(trayCode, res.data[0].descrC);
+            this.dealScanCode(trayCode, res.data[0]);
           } else {
             // 没查询到货物信息，直接报警
             this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
@@ -1189,13 +1198,29 @@ export default {
           this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
         });
     },
-    dealScanCode(trayCode, descrC) {
+    dealScanCode(trayCode, wmsInfo) {
       // 判断目的地-先不判断，先直接写死进入C队列
       // 查询C队列托盘情况，查找第一个空闲的托盘位置
-      const params = {
-        queueName: 'C'
-      };
-      HttpUtil.post('/queue_info/queryQueueList', params)
+      // 如果wmsInfo.mudidi为’2800-1‘，进入C队列
+      // 如果wmsInfo.mudidi为’2800-2‘，进入A队列
+      // 如果wmsInfo.mudidi为’2800-3‘，进入B队列
+      // 如果没有上面，则return 并输出日志
+      let queueName = '';
+      if (wmsInfo.mudidi === '2800-1') {
+        queueName = 'C';
+      } else if (wmsInfo.mudidi === '2800-2') {
+        queueName = 'A';
+      } else if (wmsInfo.mudidi === '2800-3') {
+        queueName = 'B';
+      } else {
+        this.addLog(
+          `托盘入库失败：${trayCode}，目的地为${wmsInfo.mudidi}，不支持的入库目的地`
+        );
+        return;
+      }
+      HttpUtil.post('/queue_info/queryQueueList', {
+        queueName
+      })
         .then(async (res) => {
           if (res.data && res.data.length > 0) {
             // 查找第一个空闲的托盘位置，目前只检索queueNum在6-20的托盘
@@ -1220,7 +1245,7 @@ export default {
                   trayInfo: trayCode,
                   trayStatus: '0',
                   robotTaskCode,
-                  trayInfoAdd: descrC
+                  trayInfoAdd: wmsInfo.descrC
                 };
                 HttpUtil.post('/queue_info/update', param)
                   .then(() => {
@@ -1228,6 +1253,17 @@ export default {
                     this.addLog(
                       `托盘已入库：${trayCode}, 缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}`
                     );
+                    // 回更WMS信息
+                    HttpUtil.post('/order_info/update', {
+                      uuid: wmsInfo.uuid,
+                      zt: 'Y'
+                    })
+                      .then(() => {
+                        this.addLog(`已回更WMS信息成功`);
+                      })
+                      .catch((err) => {
+                        this.addLog(`托盘入库成功，回更WMS信息失败：${err}`);
+                      });
                   })
                   .catch((err) => {
                     this.$message.error('托盘入库失败，请重试');
