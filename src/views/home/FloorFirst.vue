@@ -167,7 +167,19 @@
       <div class="floor-container">
         <!-- 左侧区域 -->
         <div class="floor-left">
-          <div class="floor-title"><i class="el-icon-monitor"></i> 生产线</div>
+          <!-- 修改生产线标题部分，添加按钮 -->
+          <div class="floor-title" style="position: relative">
+            <i class="el-icon-monitor"></i> 生产线
+            <el-button
+              style="position: absolute; right: 2px"
+              type="primary"
+              size="mini"
+              @click="showAgvTaskManagement"
+              icon="el-icon-truck"
+            >
+              AGV运行中任务管理
+            </el-button>
+          </div>
           <div class="floor-image-container">
             <div class="image-wrapper">
               <img
@@ -698,6 +710,109 @@
         >
       </span>
     </el-dialog>
+
+    <!-- 添加AGV任务管理弹窗 -->
+    <el-dialog
+      title="AGV运行中任务管理"
+      :visible.sync="agvTaskDialogVisible"
+      width="980px"
+      append-to-body
+      :close-on-click-modal="false"
+      custom-class="agv-task-dialog"
+    >
+      <div class="agv-task-management">
+        <div class="task-header">
+          <el-tabs
+            v-model="currentAgvTaskFloor"
+            @tab-click="handleAgvTaskTabChange"
+          >
+            <el-tab-pane
+              label="一层AGV运行中任务管理"
+              name="floor1"
+            ></el-tab-pane>
+            <el-tab-pane
+              label="二层AGV运行中任务管理"
+              name="floor2"
+            ></el-tab-pane>
+            <el-tab-pane
+              label="三层AGV运行中任务管理"
+              name="floor3"
+            ></el-tab-pane>
+          </el-tabs>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-refresh"
+            @click="refreshAgvTasks"
+            :loading="agvTasksLoading"
+          >
+            刷新
+          </el-button>
+        </div>
+
+        <div class="task-table">
+          <el-table
+            :data="currentAgvTasks"
+            border
+            style="width: 100%"
+            max-height="550px"
+            v-loading="agvTasksLoading"
+          >
+            <el-table-column
+              type="index"
+              label="序号"
+              width="60"
+              align="center"
+            ></el-table-column>
+            <el-table-column label="队列位置" min-width="100" align="center">
+              <template slot-scope="scope">
+                <span>{{ scope.row.queueName }}{{ scope.row.queueNum }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="trayInfo"
+              label="托盘号"
+              min-width="120"
+              align="center"
+            ></el-table-column>
+            <el-table-column
+              prop="trayInfoAdd"
+              label="产品描述"
+              min-width="220"
+            ></el-table-column>
+            <el-table-column
+              prop="robotTaskCode"
+              label="任务号"
+              min-width="140"
+              align="center"
+            ></el-table-column>
+            <el-table-column
+              prop="trayStatus"
+              label="当前状态"
+              min-width="180"
+              align="center"
+            >
+              <template slot-scope="scope">
+                <span>{{ getAgvTaskStatusText(scope.row.trayStatus) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" align="center">
+              <template slot-scope="scope">
+                <el-button
+                  v-if="scope.row.isWaitCancel !== '1'"
+                  type="danger"
+                  size="mini"
+                  @click="cancelAgvTask(scope.row)"
+                >
+                  取消执行
+                </el-button>
+                <span v-else class="waiting-cancel-text">正在等待取消执行</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -903,7 +1018,11 @@ export default {
       // 托盘移动功能所需数据
       movePalletDialogVisible: false,
       sourcePalletToMove: null,
-      selectedTargetPalletIdForMove: null
+      selectedTargetPalletIdForMove: null,
+      agvTaskDialogVisible: false,
+      currentAgvTaskFloor: 'floor1',
+      currentAgvTasks: [],
+      agvTasksLoading: false
     };
   },
   computed: {
@@ -2043,8 +2162,119 @@ export default {
         const errorMsg = error && error.message ? error.message : '操作异常';
         this.$message.error(`托盘移动操作异常: ${errorMsg}`);
       }
-    }
+    },
     // --- 托盘移动功能方法 END ---
+    showAgvTaskManagement() {
+      this.agvTaskDialogVisible = true;
+      this.refreshAgvTasks();
+    },
+
+    refreshAgvTasks() {
+      this.agvTasksLoading = true;
+      HttpUtil.post('/queue_info/queryQueueList', {})
+        .then((res) => {
+          if (res.data && Array.isArray(res.data)) {
+            // 筛选出trayStatus为'0'、'1'、'3'、'4'、'6'、'7'状态的数据
+            const runningTasks = res.data.filter((item) =>
+              ['0', '1', '3', '4', '6', '7'].includes(item.trayStatus)
+            );
+
+            // 根据楼层分类
+            const floor1Tasks = runningTasks.filter(
+              (item) =>
+                item.queueName === 'AGV2-2' ||
+                ['6', '7'].includes(item.trayStatus)
+            );
+            const floor2Tasks = runningTasks.filter((item) =>
+              ['0', '1', '3', '4'].includes(item.trayStatus)
+            );
+            const floor3Tasks = runningTasks.filter(
+              (item) =>
+                item.queueName === 'AGV3-1' ||
+                item.targetPosition?.includes('三楼')
+            );
+
+            // 根据当前选中的楼层显示对应的数据
+            switch (this.currentAgvTaskFloor) {
+              case 'floor1':
+                this.currentAgvTasks = floor1Tasks;
+                break;
+              case 'floor2':
+                this.currentAgvTasks = floor2Tasks;
+                break;
+              case 'floor3':
+                this.currentAgvTasks = [];
+                break;
+              default:
+                this.currentAgvTasks = [];
+            }
+            console.log(this.currentAgvTasks);
+          } else {
+            this.currentAgvTasks = [];
+            this.$message.warning('未获取到任务数据');
+          }
+        })
+        .catch((err) => {
+          console.error('获取AGV任务数据失败:', err);
+          this.$message.error('获取AGV任务数据失败');
+          this.currentAgvTasks = [];
+        })
+        .finally(() => {
+          this.agvTasksLoading = false;
+        });
+    },
+
+    handleAgvTaskTabChange() {
+      this.refreshAgvTasks();
+    },
+
+    cancelAgvTask(task) {
+      this.$confirm(`确认取消托盘"${task.trayInfo}"的任务吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+        .then(() => {
+          // 调用取消AGV任务的API
+          HttpUtil.post('/queue_info/update', {
+            id: task.id,
+            isWaitCancel: '1'
+          })
+            .then((res) => {
+              if (res.data == 1) {
+                this.$message.success('任务取消请求已发送');
+                this.addLog(`托盘"${task.trayInfo}"的任务取消请求已发送`);
+                // 刷新任务列表
+                this.refreshAgvTasks();
+              } else {
+                this.$message.error('任务取消请求失败');
+              }
+            })
+            .catch((err) => {
+              console.error('取消AGV任务失败:', err);
+              this.$message.error('取消AGV任务失败');
+            });
+        })
+        .catch(() => {
+          // 取消操作
+        });
+    },
+
+    getAgvTaskStatusText(status) {
+      // 根据trayStatus状态返回对应的文本描述
+      const statusMap = {
+        0: '在2800等待AGV取货',
+        1: '已在2800取货，正往缓存区运送',
+        2: '已送至2楼缓存区',
+        3: '在缓存区等待AGV取货',
+        4: '已在缓存区取货，正往运往目的地',
+        5: '已送至2楼目的地',
+        6: '等待一楼AGV取货',
+        7: 'AGV已在一楼AGV1-1取货，正运往目的地'
+      };
+
+      return statusMap[status] || '未知状态';
+    }
   }
 };
 </script>
@@ -3094,5 +3324,148 @@ export default {
   .target-pallet-list::-webkit-scrollbar-thumb:hover {
     background: rgba(64, 158, 255, 0.5);
   }
+}
+
+.agv-task-dialog {
+  background: rgba(24, 29, 47, 0.95) !important;
+  backdrop-filter: blur(12px);
+
+  :deep(.el-dialog__header) {
+    padding: 12px 20px;
+    background: rgba(64, 158, 255, 0.1);
+    border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+  }
+
+  :deep(.el-dialog__title) {
+    color: #409eff;
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 20px;
+    color: #fff;
+  }
+
+  :deep(.el-tabs__item) {
+    color: rgba(255, 255, 255, 0.6);
+    padding: 0 16px;
+    height: 36px;
+    line-height: 36px;
+    &.is-active {
+      color: #409eff;
+    }
+    &:hover {
+      color: #66b1ff;
+    }
+  }
+
+  :deep(.el-tabs__active-bar) {
+    background-color: #409eff;
+  }
+
+  :deep(.el-tabs__nav-wrap::after) {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  :deep(.el-table) {
+    background-color: transparent !important;
+  }
+
+  :deep(.el-table__header-wrapper th) {
+    background-color: rgba(64, 158, 255, 0.2) !important;
+    color: #fff !important;
+  }
+
+  :deep(.el-table__row) {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+  }
+
+  :deep(.el-table__body td) {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    color: #333 !important;
+  }
+
+  :deep(.cell) {
+    color: #333 !important;
+  }
+
+  :deep(.el-button--danger) {
+    color: #fff;
+  }
+}
+
+.agv-task-management {
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    .el-tabs {
+      flex: 1;
+    }
+
+    .el-button {
+      margin-left: 16px;
+    }
+  }
+
+  .task-table {
+    :deep(.el-table) {
+      background-color: transparent;
+
+      :deep(.el-table__header-wrapper) {
+        th {
+          background-color: rgba(64, 158, 255, 0.2);
+          border-color: rgba(255, 255, 255, 0.2);
+          color: #fff;
+          padding: 8px 0;
+        }
+      }
+
+      :deep(.el-table__body-wrapper) {
+        background-color: transparent;
+
+        tr {
+          background-color: rgba(30, 42, 56, 0.95);
+          &:hover > td {
+            background-color: rgba(64, 158, 255, 0.1) !important;
+          }
+        }
+
+        td {
+          border-bottom-color: rgba(255, 255, 255, 0.1);
+          color: #e0e0e0;
+          padding: 8px 0;
+        }
+      }
+
+      :deep(.el-table--border),
+      :deep(.el-table--border::after),
+      :deep(.el-table--border::before) {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      :deep(.el-table--border th),
+      :deep(.el-table--border td) {
+        border-right: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      :deep(.el-table__empty-block) {
+        background-color: rgba(30, 42, 56, 0.95);
+
+        .el-table__empty-text {
+          color: rgba(255, 255, 255, 0.6);
+        }
+      }
+    }
+  }
+}
+
+.waiting-cancel-text {
+  color: #f56c6c;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>
