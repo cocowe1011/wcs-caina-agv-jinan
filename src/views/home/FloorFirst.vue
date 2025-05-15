@@ -369,7 +369,7 @@
     <el-drawer
       :visible.sync="palletStorageDrawerVisible"
       direction="rtl"
-      size="400px"
+      size="450px"
       :modal="false"
       custom-class="storage-drawer"
     >
@@ -409,7 +409,7 @@
                 type="warning"
                 size="small"
                 style="margin-left: 15px"
-                >已在2800取货，正往缓存区运送</el-tag
+                >已在2800取货，正运往缓存区</el-tag
               ><el-tag
                 v-if="item.trayStatus === '2'"
                 size="small"
@@ -426,7 +426,7 @@
                 size="small"
                 type="warning"
                 style="margin-left: 15px"
-                >已在缓存区取货，正往运往目的地</el-tag
+                >已在缓存区取货，正运往目的地</el-tag
               ></span
             >
             <span v-else
@@ -442,6 +442,14 @@
               class="card-actions"
               v-if="currentStorageTitle !== 'AGV2-2队列' && item.trayInfo"
             >
+              <el-button
+                type="text"
+                size="mini"
+                @click="handleOpenMovePalletDialog(item)"
+              >
+                <i class="el-icon-s-promotion"></i>
+                移动
+              </el-button>
               <el-button
                 type="text"
                 size="mini"
@@ -627,6 +635,68 @@
           </div>
         </div>
       </div>
+    </el-dialog>
+    <!-- 托盘移动对话框 -->
+    <el-dialog
+      title="移动托盘"
+      :visible.sync="movePalletDialogVisible"
+      width="450px"
+      append-to-body
+      custom-class="move-pallet-dialog"
+      :close-on-click-modal="false"
+      @close="resetMovePalletDialog"
+    >
+      <div v-if="sourcePalletToMove">
+        <div class="target-pallet-list">
+          <el-radio-group
+            v-model="selectedTargetPalletIdForMove"
+            style="width: 100%"
+          >
+            <div
+              v-for="targetPallet in currentStoragePositions"
+              :key="targetPallet.id"
+              class="target-pallet-item"
+              :class="{
+                'is-source':
+                  sourcePalletToMove &&
+                  targetPallet.id === sourcePalletToMove.id
+              }"
+            >
+              <el-radio
+                :label="targetPallet.id"
+                border
+                size="small"
+                style="width: 100%"
+                :disabled="
+                  sourcePalletToMove &&
+                  targetPallet.id === sourcePalletToMove.id
+                "
+              >
+                位置: {{ targetPallet.queueName }}{{ targetPallet.queueNum }}
+                <span
+                  v-if="targetPallet.trayInfo"
+                  style="margin-left: 10px; color: #e6a23c"
+                >
+                  (当前: {{ targetPallet.trayInfo }})
+                </span>
+                <span v-else style="margin-left: 10px; color: #67c23a">
+                  (空闲)
+                </span>
+              </el-radio>
+            </div>
+          </el-radio-group>
+        </div>
+      </div>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="resetMovePalletDialog" size="small">取消</el-button>
+        <el-button
+          type="primary"
+          @click="confirmPalletMove"
+          size="small"
+          :disabled="!selectedTargetPalletIdForMove"
+          >确定</el-button
+        >
+      </span>
     </el-dialog>
   </div>
 </template>
@@ -829,7 +899,11 @@ export default {
         'AGV3-1': '302'
       },
       twoEightHundredPalletTestCode: '',
-      agvSignalLoading: false
+      agvSignalLoading: false,
+      // 托盘移动功能所需数据
+      movePalletDialogVisible: false,
+      sourcePalletToMove: null,
+      selectedTargetPalletIdForMove: null
     };
   },
   computed: {
@@ -1201,9 +1275,9 @@ export default {
     dealScanCode(trayCode, wmsInfo) {
       // 判断目的地-先不判断，先直接写死进入C队列
       // 查询C队列托盘情况，查找第一个空闲的托盘位置
-      // 如果wmsInfo.mudidi为’2800-1‘，进入C队列
-      // 如果wmsInfo.mudidi为’2800-2‘，进入A队列
-      // 如果wmsInfo.mudidi为’2800-3‘，进入B队列
+      // 如果wmsInfo.mudidi为'2800-1'，进入C队列
+      // 如果wmsInfo.mudidi为'2800-2'，进入A队列
+      // 如果wmsInfo.mudidi为'2800-3'，进入B队列
       // 如果没有上面，则return 并输出日志
       let queueName = '';
       if (wmsInfo.mudidi === '2800-1') {
@@ -1223,12 +1297,9 @@ export default {
       })
         .then(async (res) => {
           if (res.data && res.data.length > 0) {
-            // 查找第一个空闲的托盘位置，目前只检索queueNum在6-20的托盘
+            // 查找第一个空闲的托盘位置
             const emptyPosition = res.data.find(
-              (item) =>
-                (item.trayInfo === null || item.trayInfo === '') &&
-                item.queueNum >= 6 &&
-                item.queueNum <= 20
+              (item) => item.trayInfo === null || item.trayInfo === ''
             );
             if (emptyPosition) {
               // 说明有空缓存位置
@@ -1357,7 +1428,7 @@ export default {
       }
     },
 
-    handleSingleModeChange() {
+    async handleSingleModeChange() {
       if (!this.agvSchedule.startPosition || !this.agvSchedule.endPosition) {
         this.$message.warning('请先选择起点和终点');
         return;
@@ -1386,34 +1457,193 @@ export default {
 
         if (this.agvSchedule.endPosition.includes('AGV')) {
           // 转盘-输送线，起点终点都与plc进行安全交互
+          // todo 这种方式先不处理占位问题
           taskType = 'PF-FMR-COMMON-JH';
           toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+          this.agvSchedule.status = 'singleRunning';
+          // 调用发送AGV指令方法
+          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
         } else {
           // 转盘-缓存区，只有起点与plc进行安全交互
           taskType = 'PF-FMR-COMMON-JH1';
           toSiteCode = this.agvSchedule.endPosition;
+          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
+            queueName: toSiteCode.charAt(0),
+            queueNum: toSiteCode.substring(1)
+          });
+          if (res.data && res.data.length > 0) {
+            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
+              this.agvSchedule.status = 'singleRunning';
+              // 调用发送AGV指令方法
+              const robotTaskCode = await this.sendAgvCommand(
+                taskType,
+                fromSiteCode,
+                toSiteCode
+              );
+              if (robotTaskCode !== '') {
+                // 转盘-缓存区
+                const param = {
+                  id: res.data[0].id,
+                  trayInfo: '1111111',
+                  trayStatus: '0',
+                  robotTaskCode,
+                  trayInfoAdd: '临时托盘'
+                };
+                HttpUtil.post('/queue_info/update', param)
+                  .then((returnRes) => {
+                    if (returnRes.data == 1) {
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}成功！`);
+                      this.$message.success(
+                        `手动调度去往缓存区：${toSiteCode}成功！`
+                      );
+                    } else {
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
+                      this.$message.error(
+                        `手动调度去往缓存区：${toSiteCode}失败！`
+                      );
+                    }
+                  })
+                  .catch((err) => {
+                    this.addLog(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                    this.$message.error(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                  });
+              }
+            } else {
+              this.$message.error(
+                `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+              );
+              this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
+            }
+          } else {
+            this.addLog('没有此缓存区位置，请检查输入的缓存区位置是否正确');
+            this.$message.error(
+              '没有此缓存区位置，请检查输入的缓存区位置是否正确'
+            );
+          }
+        }
+      } else if (
+        this.agvSchedule.startPosition === 'AGV1-1' ||
+        this.agvSchedule.startPosition === 'AGV3-1'
+      ) {
+        // 说明起点是AGV1-1或AGV3-1
+        fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
+        if (
+          (this.agvSchedule.startPosition === 'AGV1-1' &&
+            this.agvSchedule.endPosition.includes('D')) ||
+          (this.agvSchedule.startPosition === 'AGV3-1' &&
+            this.agvSchedule.endPosition.includes('E'))
+        ) {
+          // AGV1-1-输送线，只有终点与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH4';
+          toSiteCode = this.agvSchedule.endPosition;
+          this.agvSchedule.status = 'singleRunning';
+          // 调用发送AGV指令方法
+          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+        } else {
+          // 目前没有这种类型，报错
+          taskType = 'ERROR';
+          this.addLog(
+            `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
+          );
+          this.$message.error(
+            `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
+          );
         }
       } else {
         // 说明起点是缓存区
         fromSiteCode = this.agvSchedule.startPosition;
-
         if (this.agvSchedule.endPosition.includes('AGV')) {
           // 缓存区-输送线，只有终点与plc进行安全交互
           taskType = 'PF-FMR-COMMON-JH2';
           toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+          // 判断起点缓存位有没有托盘占位，如果没有直接报错提示，并返回
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            // fromSiteCode的格式是C1,C2... 截取fromSiteCode第一位为queueName，后面为queueNum
+            queueName: fromSiteCode.charAt(0),
+            queueNum: fromSiteCode.substring(1)
+          });
+          if (res.data && res.data.length > 0) {
+            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
+              this.addLog(`起点：${fromSiteCode}没有信息，请扫码录入信息。`);
+              this.$message.error(
+                `起点：${fromSiteCode}没有信息，请扫码录入信息。`
+              );
+            } else {
+              this.agvSchedule.status = 'singleRunning';
+              // 调用发送AGV指令方法
+              const robotTaskCode = await this.sendAgvCommand(
+                taskType,
+                fromSiteCode,
+                toSiteCode
+              );
+              if (robotTaskCode !== '') {
+                // 缓存区-输送线
+                const param = {
+                  id: res.data[0].id,
+                  trayStatus: '3', // -在缓存区等待AGV取货
+                  robotTaskCode,
+                  targetPosition: this.agvSchedule.endPosition // 保存目的地信息
+                };
+                HttpUtil.post('/queue_info/update', param)
+                  .then((returnRes) => {
+                    if (returnRes.data == 1) {
+                      this.addLog(
+                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+                      );
+                      this.$message.success(
+                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+                      );
+                    } else {
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
+                      this.$message.error(
+                        `手动调度去往缓存区：${toSiteCode}失败！`
+                      );
+                    }
+                  })
+                  .catch((err) => {
+                    this.addLog(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                    this.$message.error(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                  });
+              }
+            }
+          } else {
+            this.$message.error(
+              '未查到此起点信息，请检查输入的缓存区位置是否正确'
+            );
+            this.addLog('未查到此起点信息，请检查输入的缓存区位置是否正确');
+          }
         } else {
-          // 缓存区-缓存区，不需要与plc交互，报错，没有这种任务类型
-          taskType = 'ERROR';
+          // 缓存区-缓存区
+          taskType = 'PF-FMR-COMMON-PY';
+          toSiteCode = this.agvSchedule.endPosition;
+          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
+            queueName: toSiteCode.charAt(0),
+            queueNum: toSiteCode.substring(1)
+          });
+          if (res.data && res.data.length > 0) {
+            this.$message.error(
+              `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+            );
+            this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
+            return;
+          }
+          this.agvSchedule.status = 'singleRunning';
+          // 调用发送AGV指令方法
+          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
         }
       }
-      if (taskType === 'ERROR') {
-        this.$message.warning(
-          `指令为缓存区到缓存区，没有这种任务类型，请检查！`
-        );
-      }
-      this.agvSchedule.status = 'singleRunning';
-      // 调用发送AGV指令方法
-      this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
     },
     stopAgvSchedule() {
       if (this.agvSchedule.status === 'cycleRunning') {
@@ -1488,7 +1718,7 @@ export default {
       }
       // 每3秒轮询一次，并立即执行一次
       this.pollForPalletsToMove();
-      this.pollingTimerCtoAGV22 = setInterval(this.pollForPalletsToMove, 3000);
+      this.pollingTimerCtoAGV22 = setInterval(this.pollForPalletsToMove, 5000);
       this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已启动。');
     },
 
@@ -1501,14 +1731,64 @@ export default {
     },
     // 轮询C区有没有能够移到AGV2-2队列的托盘
     pollForPalletsToMove() {
-      HttpUtil.post('/queue_info/queryQueueList', {
-        queueName: 'C',
-        trayStatus: '5'
-      }).then((res) => {
+      HttpUtil.post('/queue_info/queryQueueList', {}).then((res) => {
         if (res && res.data.length > 0) {
-          this.insertPalletToAGV22(res.data);
+          // 过滤出C队列状态为5的托盘
+          const status5Pallets = res.data.filter(
+            (item) => item.trayStatus === '5' && item.queueName === 'C'
+          );
+          if (status5Pallets.length > 0) {
+            this.insertPalletToAGV22(status5Pallets);
+          }
+
+          // 过滤出AGV2-2队列状态为7的托盘
+          const status7Pallets = res.data.filter(
+            (item) => item.trayStatus === '7' && item.queueName === 'AGV2-2'
+          );
+          if (status7Pallets.length > 0) {
+            this.deletePalletsWithStatus7(status7Pallets);
+          }
         }
       });
+    },
+    // 预留处理状态为7的托盘的删除方法
+    deletePalletsWithStatus7(pallets) {
+      const param = {
+        id: pallets[0].id
+      };
+      HttpUtil.post('/queue_info/delete', param)
+        .then((res) => {
+          if (res.data == 1) {
+            // 设置第2位为1，保留其他位
+            // 修改位操作，与读取时保持一致，使用第13位（对应bit5）
+            this.currentDBW106Value |= 1 << 13; // 按位或，设置第13位为1
+            ipcRenderer.send(
+              'writeValuesToPLC',
+              'DBW106',
+              this.currentDBW106Value
+            );
+
+            // 再过1秒后发送第三个命令
+            setTimeout(() => {
+              // 清除第2位为0，保留其他位
+              // 修改位操作，与读取时保持一致，使用第13位（对应bit5）
+              this.currentDBW106Value &= ~(1 << 13); // 按位与上第13位的反码，清除第13位
+              ipcRenderer.send(
+                'writeValuesToPLC',
+                'DBW106',
+                this.currentDBW106Value
+              );
+            }, 1000);
+            this.addLog(
+              `托盘${pallets[0].trayInfo}已从AGV2-2队列删除，已给PLC触发取货完成信号。`
+            );
+          } else {
+            this.addLog(`托盘${pallets[0].trayInfo}删除失败，请检查。`);
+          }
+        })
+        .catch((err) => {
+          this.addLog(`托盘${pallets[0].trayInfo}删除失败，请检查。${err}`);
+        });
     },
     // 将托盘插入AGV2-2队列
     insertPalletToAGV22(pallets) {
@@ -1678,7 +1958,93 @@ export default {
         this.agvSignalLoading = false;
         this.addLog('模拟一楼提升机出口有货信号已恢复');
       }, 1000);
+    },
+    // --- 托盘移动功能方法 START ---
+    handleOpenMovePalletDialog(item) {
+      this.loadPalletStorageByArea(this.currentStorageArea); // 重新加载数据
+      this.sourcePalletToMove = JSON.parse(JSON.stringify(item)); // 深拷贝
+      this.selectedTargetPalletIdForMove = null; // 重置选择
+      this.movePalletDialogVisible = true;
+    },
+
+    resetMovePalletDialog() {
+      this.movePalletDialogVisible = false;
+      this.sourcePalletToMove = null;
+      this.selectedTargetPalletIdForMove = null;
+    },
+
+    async confirmPalletMove() {
+      if (!this.sourcePalletToMove || !this.selectedTargetPalletIdForMove) {
+        this.$message.warning('未选择源托盘或目标位置。');
+        return;
+      }
+
+      const source = this.sourcePalletToMove;
+      // 确保从最新的 currentStoragePositions 中查找目标，以防 stale data
+      const currentTargetList =
+        this.palletStorageAreas[this.currentStorageArea] || [];
+      const target = currentTargetList.find(
+        (p) => p.id === this.selectedTargetPalletIdForMove
+      );
+
+      if (!target) {
+        this.$message.error('找不到目标位置信息，请刷新后重试。');
+        return;
+      }
+
+      if (source.id === target.id) {
+        this.$message.warning('源位置和目标位置不能相同。');
+        return;
+      }
+      const fieldsToHandle = [
+        'trayInfo',
+        'trayStatus',
+        'robotTaskCode',
+        'trayInfoAdd',
+        'targetPosition'
+      ];
+      const updates = [];
+
+      if (target.trayInfo) {
+        const sourceUpdate = { id: source.id };
+        const targetUpdate = { id: target.id };
+
+        fieldsToHandle.forEach((field) => {
+          sourceUpdate[field] = target[field];
+          targetUpdate[field] = source[field];
+        });
+        updates.push(sourceUpdate, targetUpdate);
+      } else {
+        const targetUpdate = { id: target.id };
+        fieldsToHandle.forEach((field) => {
+          targetUpdate[field] = source[field];
+        });
+
+        const sourceClearUpdate = { id: source.id };
+        fieldsToHandle.forEach((field) => {
+          sourceClearUpdate[field] = ''; // 清空字段，与移除操作保持一致
+        });
+        updates.push(targetUpdate, sourceClearUpdate);
+      }
+
+      try {
+        const res = await HttpUtil.post('/queue_info/updateByList', updates);
+        // 根据实际API返回结果判断成功，这里假设 res.data > 0 表示成功更新记录数
+        if (res.data == 1) {
+          // 假设后端返回的成功标识
+          this.$message.success('托盘移动成功！');
+          this.loadPalletStorageByArea(this.currentStorageArea); // 刷新列表
+          this.resetMovePalletDialog();
+        } else {
+          const errorMsg = res && res.message ? res.message : '未知错误';
+          this.$message.error(`托盘移动失败: ${errorMsg}`);
+        }
+      } catch (error) {
+        const errorMsg = error && error.message ? error.message : '操作异常';
+        this.$message.error(`托盘移动操作异常: ${errorMsg}`);
+      }
     }
+    // --- 托盘移动功能方法 END ---
   }
 };
 </script>
@@ -2663,5 +3029,70 @@ export default {
 
 :deep(.test-panel-dialog .el-form-item:last-child) {
   margin-bottom: 0;
+}
+
+/* 托盘移动对话框样式 */
+.move-pallet-dialog {
+  .target-pallet-list {
+    max-height: 350px; /* 增加列表最大高度 */
+    overflow-y: auto;
+    padding-right: 5px; /* For scrollbar, if thin */
+    margin-top: 0px; /* 调整与上方文字间距 */
+  }
+
+  .target-pallet-item {
+    margin-bottom: 8px;
+    /* padding: 2px; */ /* 移除或调整内边距，el-radio[border]自带一些 */
+    border-radius: 4px;
+    transition: background-color 0.2s;
+
+    .el-radio.is-bordered {
+      width: 100%;
+      padding: 8px 15px; /* 调整el-radio的内边距 */
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background-color: rgba(255, 255, 255, 0.03); /* 略微调暗背景 */
+      &:hover {
+        border-color: #409eff;
+        background-color: rgba(64, 158, 255, 0.05);
+      }
+    }
+    .el-radio.is-bordered.is-checked {
+      border-color: #409eff;
+      background-color: rgba(64, 158, 255, 0.1);
+    }
+    .el-radio__label {
+      color: #e0e0e0; /* 标签文字颜色稍亮 */
+      font-size: 13px; /* 调整字体大小 */
+    }
+    .el-radio__input.is-disabled .el-radio__inner {
+      /* 禁用项样式 */
+      background-color: rgba(128, 128, 128, 0.2);
+      border-color: rgba(128, 128, 128, 0.3);
+    }
+    &.is-source .el-radio.is-bordered {
+      /* 源托盘的特殊样式 */
+      background-color: rgba(100, 100, 100, 0.2); /* 暗化背景表示禁用 */
+      border-color: rgba(100, 100, 100, 0.4);
+      cursor: not-allowed;
+    }
+    &.is-source .el-radio__label {
+      color: #888; /* 暗化文字 */
+    }
+  }
+  /* 滚动条样式 */
+  .target-pallet-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .target-pallet-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+  }
+  .target-pallet-list::-webkit-scrollbar-thumb {
+    background: rgba(64, 158, 255, 0.3);
+    border-radius: 3px;
+  }
+  .target-pallet-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(64, 158, 255, 0.5);
+  }
 }
 </style>
