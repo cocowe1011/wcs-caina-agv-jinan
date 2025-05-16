@@ -2234,26 +2234,32 @@ export default {
         cancelButtonText: '取消',
         type: 'warning'
       })
-        .then(() => {
-          // 调用取消AGV任务的API
-          HttpUtil.post('/queue_info/update', {
-            id: task.id,
-            isWaitCancel: '1'
-          })
-            .then((res) => {
-              if (res.data == 1) {
-                this.$message.success('任务取消请求已发送');
-                this.addLog(`托盘"${task.trayInfo}"的任务取消请求已发送`);
-                // 刷新任务列表
-                this.refreshAgvTasks();
-              } else {
-                this.$message.error('任务取消请求失败');
-              }
+        .then(async () => {
+          const robotTaskCode = await this.sendCancelAgvCommand(
+            task.robotTaskCode,
+            task.trayInfo
+          );
+          if (robotTaskCode !== '') {
+            // 调用取消AGV任务的API
+            HttpUtil.post('/queue_info/update', {
+              id: task.id,
+              isWaitCancel: '1'
             })
-            .catch((err) => {
-              console.error('取消AGV任务失败:', err);
-              this.$message.error('取消AGV任务失败');
-            });
+              .then((res) => {
+                if (res.data == 1) {
+                  this.$message.success('任务取消请求已发送');
+                  this.addLog(`托盘"${task.trayInfo}"的任务取消请求已发送`);
+                  // 刷新任务列表
+                  this.refreshAgvTasks();
+                } else {
+                  this.$message.error('任务取消请求失败');
+                }
+              })
+              .catch((err) => {
+                console.error('取消AGV任务失败:', err);
+                this.$message.error('取消AGV任务失败');
+              });
+          }
         })
         .catch(() => {
           // 取消操作
@@ -2274,6 +2280,64 @@ export default {
       };
 
       return statusMap[status] || '未知状态';
+    },
+    async sendCancelAgvCommand(robotTaskCode, trayInfo) {
+      // 测试用，返回当前时间戳
+      // this.addLog(
+      //   `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
+      // );
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        robotTaskCode: robotTaskCode,
+        cancelType: 'CANCEL'
+      };
+      this.addLog(
+        `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/cancel',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskFinished':
+              errorMsg = '任务已结束';
+              break;
+            case 'Err_TaskNotFound':
+              errorMsg = '任务找不到';
+              break;
+            case 'Err_TaskModifyReject':
+              errorMsg = '任务当前无法变更';
+              break;
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '新任务任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与新任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodesNotMatch':
+              errorMsg = '机器人编号与新任务不匹配，无法调度';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     }
   }
 };
