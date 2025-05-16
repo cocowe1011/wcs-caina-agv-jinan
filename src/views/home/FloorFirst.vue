@@ -2182,7 +2182,7 @@ export default {
             // 根据楼层分类
             const floor1Tasks = runningTasks.filter(
               (item) =>
-                item.queueName === 'AGV2-2' ||
+                item.queueName === 'AGV2-2' &&
                 ['6', '7'].includes(item.trayStatus)
             );
             const floor2Tasks = runningTasks.filter((item) =>
