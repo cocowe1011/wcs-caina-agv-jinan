@@ -24,7 +24,7 @@
     </div>
     <!-- 左侧区域 -->
     <div class="floor-left">
-      <FloorFirst v-if="currentFloor === 1" />
+      <FloorFirst v-show="currentFloor === 1" />
       <FloorTwo v-if="currentFloor === 2" />
     </div>
   </div>
