@@ -1,110 +1,380 @@
 <template>
-  <div class="floor-image-container">
-    <div class="image-wrapper">
-      <img
-        src="@/assets/jinan-agv/2500.png"
-        alt="一楼平面图"
-        class="floor-image"
-        @load="updateMarkerPositions"
-      />
-      <!-- 上货扫码区域提示 -->
-      <div class="marker-with-panel" data-x="200" data-y="360">
-        <div class="pulse"></div>
-        <div
-          class="data-panel"
-          :class="['position-right', { 'always-show': true }]"
-        >
-          <div class="data-panel-header">
-            <span>上货扫码信息</span>
+  <div class="content-wrapper">
+    <!-- 左侧面板 -->
+    <div class="side-info-panel">
+      <!-- AGV调度区域 -->
+      <div class="agv-schedule-section">
+        <div class="section-header">
+          <span>AGV调度</span>
+        </div>
+        <div class="agv-schedule-content">
+          <div class="agv-route-selector">
+            <div class="route-row">
+              <div class="route-item">
+                <div class="route-label">起点：</div>
+                <el-autocomplete
+                  v-model="agvSchedule.startPosition"
+                  :fetch-suggestions="querySearchStartAsync"
+                  placeholder="选择或输入起点"
+                  @select="handleStartSelect"
+                  class="agv-input"
+                  size="mini"
+                ></el-autocomplete>
+              </div>
+              <div class="route-item">
+                <div class="route-label">终点：</div>
+                <el-autocomplete
+                  v-model="agvSchedule.endPosition"
+                  :fetch-suggestions="querySearchEndAsync"
+                  placeholder="选择或输入终点"
+                  @select="handleEndSelect"
+                  class="agv-input"
+                  size="mini"
+                ></el-autocomplete>
+              </div>
+            </div>
           </div>
-          <div class="data-panel-content">
-            <div class="data-panel-row">
-              <span class="data-panel-label">当前上货扫码信息：</span>
-              <span>{{ scanInfo.palletCode || '暂无' }}</span>
+          <div class="agv-controls">
+            <el-button
+              type="primary"
+              size="mini"
+              class="agv-btn"
+              icon="el-icon-position"
+              @click="handleSingleModeChange()"
+            >
+              单次执行
+            </el-button>
+            <el-button
+              type="danger"
+              size="mini"
+              class="agv-btn"
+              icon="el-icon-close"
+              v-if="agvSchedule.status === 'cycleRunning'"
+              @click="handleAgvModeChange(false)"
+            >
+              停止循环执行
+            </el-button>
+            <el-button
+              type="primary"
+              size="mini"
+              class="agv-btn"
+              icon="el-icon-refresh"
+              v-else
+              @click="handleAgvModeChange(true)"
+            >
+              循环执行
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 日志区域 -->
+      <div class="log-section">
+        <div class="section-header">
+          运行日志
+          <div class="log-tabs">
+            <div
+              class="log-tab"
+              :class="{ active: activeLogType === 'running' }"
+              @click="activeLogType = 'running'"
+            >
+              运行日志
             </div>
-            <div class="data-panel-row">
-              <span class="data-panel-label">货品名称：</span>
-              <span>{{ scanInfo.productName || '暂无' }}</span>
+            <div
+              class="log-tab"
+              :class="{ active: activeLogType === 'alarm' }"
+              @click="activeLogType = 'alarm'"
+            >
+              报警日志
+              <div v-if="unreadAlarms > 0" class="alarm-badge">
+                {{ unreadAlarms }}
+              </div>
             </div>
-            <div class="data-panel-row">
-              <span class="data-panel-label">批次号：</span>
-              <span>{{ scanInfo.batchNumber || '暂无' }}</span>
+          </div>
+        </div>
+        <div class="scrollable-content">
+          <div class="log-list">
+            <template v-if="currentLogs.length > 0">
+              <div
+                v-for="log in currentLogs"
+                :key="log.id"
+                :class="[
+                  'log-item',
+                  { alarm: log.type === 'alarm', unread: log.unread }
+                ]"
+              >
+                <div class="log-time">{{ log.timestamp }}</div>
+                <div class="log-item-content">{{ log.message }}</div>
+              </div>
+            </template>
+            <div v-else class="empty-state">
+              <i class="el-icon-chat-line-square"></i>
+              <p>
+                {{
+                  activeLogType === 'running' ? '暂无运行日志' : '暂无报警日志'
+                }}
+              </p>
             </div>
           </div>
         </div>
       </div>
-      <!-- 添加带按钮的点位示例 -->
-      <div class="marker-with-button" data-x="850" data-y="400">
-        <div class="pulse"></div>
-        <button class="marker-button" @click="handlePalletStorageClick">
-          托盘缓存区操作
-        </button>
-      </div>
-      <!-- 添加带按钮的点位示例 -->
-      <div class="marker-with-button" data-x="950" data-y="225">
-        <div class="pulse"></div>
-        <button class="marker-button" @click="handleEmptyPalletStorageClick">
-          空托盘缓存区操作
-        </button>
+    </div>
+    <!-- 右侧内容区域 -->
+    <div class="main-content">
+      <div class="floor-container">
+        <!-- 左侧区域 -->
+        <div class="floor-left">
+          <!-- 修改生产线标题部分，添加按钮 -->
+          <div class="floor-title" style="position: relative">
+            <i class="el-icon-monitor"></i> 生产线
+            <el-button
+              style="position: absolute; right: 2px"
+              type="primary"
+              size="mini"
+              @click="showAgvTaskManagement"
+              icon="el-icon-truck"
+            >
+              AGV运行中任务管理
+            </el-button>
+          </div>
+          <div class="floor-image-container">
+            <div class="image-wrapper">
+              <img
+                src="@/assets/jinan-agv/2500.png"
+                alt="一楼平面图"
+                class="floor-image"
+                @load="updateMarkerPositions"
+              />
+              <!-- 上货扫码区域提示 -->
+              <div class="marker-with-panel" data-x="260" data-y="200">
+                <div class="pulse"></div>
+                <div
+                  class="data-panel"
+                  :class="['position-bottom', { 'always-show': true }]"
+                >
+                  <div class="data-panel-header">
+                    <span>立库来料</span>
+                  </div>
+                  <div class="data-panel-content">
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">当前扫码信息：</span>
+                      <span>{{ twoEightHundredPalletCode || '--' }}</span>
+                    </div>
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">来料名称：</span>
+                      <span>{{ scanInfo.descrC || '--' }}</span>
+                    </div>
+                    <div class="data-panel-row">
+                      <span class="data-panel-label">目的地：</span>
+                      <span>{{ scanInfo.mudidi || '--' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 添加带按钮的点位示例 -->
+              <div class="marker-with-button" data-x="1020" data-y="60">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="
+                    handlePalletStorageClick('A', '拆垛间缓存库位(A1-A100)')
+                  "
+                >
+                  拆垛间缓存库位(A1-A100)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- 托盘缓存区抽屉 -->
     <el-drawer
-      title="托盘缓存区"
       :visible.sync="palletStorageDrawerVisible"
       direction="rtl"
-      size="400px"
+      size="450px"
       :modal="false"
       custom-class="storage-drawer"
     >
+      <template #title>
+        <div class="drawer-title-container">
+          <span>{{ currentStorageTitle }}</span>
+          <el-button
+            type="primary"
+            size="mini"
+            icon="el-icon-refresh"
+            @click="loadPalletStorageByArea(currentStorageArea)"
+            :loading="isRefreshing"
+            class="title-refresh-button"
+          >
+            刷新
+          </el-button>
+        </div>
+      </template>
       <div class="storage-container">
+        <!-- 原刷新按钮容器 .area-tabs 将被移除 -->
         <div
-          v-for="(position, index) in palletStoragePositions"
+          v-for="(item, index) in currentStoragePositions"
           :key="index"
           class="storage-card"
-          :class="{ 'can-move': position.palletCode }"
+          :class="{ 'can-move': item.trayInfo }"
         >
           <div class="storage-card-header">
-            <span>位置 {{ position.name }}</span>
-            <div class="card-actions">
+            <span v-if="currentStorageTitle !== 'AGV2-2队列'"
+              >位置 {{ item.queueName + item.queueNum
+              }}<el-tag
+                v-if="item.trayStatus === '0'"
+                size="small"
+                style="margin-left: 15px"
+                >在2800等待AGV取货</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '1'"
+                type="warning"
+                size="small"
+                style="margin-left: 15px"
+                >已在2800取货，正运往缓存区</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '2'"
+                size="small"
+                type="success"
+                style="margin-left: 15px"
+                >已送至2楼缓存区</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '3'"
+                size="small"
+                style="margin-left: 15px"
+                >在缓存区等待AGV取货</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '4' || item.trayStatus === '5'"
+                size="small"
+                type="warning"
+                style="margin-left: 15px"
+                >已在缓存区取货，正运往目的地</el-tag
+              ></span
+            >
+            <span v-else
+              >队列序号：{{ index + 1
+              }}<el-tag
+                v-if="item.trayStatus === '6'"
+                size="small"
+                style="margin-left: 15px"
+                >等待一楼AGV取货中</el-tag
+              ></span
+            >
+            <div
+              class="card-actions"
+              v-if="currentStorageTitle !== 'AGV2-2队列' && item.trayInfo"
+            >
               <el-button
-                v-if="!position.palletCode"
                 type="text"
                 size="mini"
-                @click="handleAddPallet(position)"
+                @click="handleOpenMovePalletDialog(item)"
               >
-                <i class="el-icon-plus"></i>
-                添加托盘
+                <i class="el-icon-s-promotion"></i>
+                移动
               </el-button>
-              <template v-else>
-                <el-button
-                  type="text"
-                  size="mini"
-                  @click="
-                    position.palletCode && handlePalletCardClick(position)
+              <el-button
+                type="text"
+                size="mini"
+                class="danger-button"
+                @click="handleRemovePallet(item)"
+              >
+                <i class="el-icon-delete"></i>
+                移除
+              </el-button>
+            </div>
+          </div>
+          <div class="storage-card-content">
+            <template v-if="item.trayInfo">
+              <div class="storage-info-container">
+                <div class="storage-info">
+                  <div class="storage-info-row">
+                    <span class="label">托盘码：</span>
+                    <span class="value">{{ item.trayInfo }}</span>
+                  </div>
+                  <div class="storage-info-row product-desc">
+                    <span class="label">产品描述：</span>
+                    <span class="value">{{
+                      item.trayInfoAdd || '暂无描述'
+                    }}</span>
+                  </div>
+                </div>
+
+                <!-- 状态为2时显示发送图标 -->
+                <div
+                  v-if="
+                    item.trayStatus === '2' &&
+                    currentStorageTitle !== 'AGV2-2队列'
+                  "
+                  class="send-action-icon"
+                >
+                  <el-button
+                    type="text"
+                    @click="item.showSendPanel = true"
+                    v-if="!item.showSendPanel"
+                  >
+                    <i
+                      class="el-icon-position"
+                      style="font-size: 18px; color: #409eff"
+                    ></i>
+                  </el-button>
+                </div>
+
+                <!-- 状态为2且点击了发送图标时显示发送面板 -->
+                <div
+                  class="send-actions"
+                  v-if="
+                    item.trayStatus === '2' &&
+                    item.showSendPanel &&
+                    currentStorageTitle !== 'AGV2-2队列'
                   "
                 >
-                  <i class="el-icon-position"></i>
-                  移动
-                </el-button>
-                <el-button
-                  type="text"
-                  size="mini"
-                  class="danger-button"
-                  @click="handleRemovePallet(position)"
+                  <el-autocomplete
+                    v-model="item.targetPosition"
+                    :fetch-suggestions="querySearchEndAsync"
+                    placeholder="发送至"
+                    size="mini"
+                    class="target-input"
+                  ></el-autocomplete>
+                  <div class="action-buttons">
+                    <el-button
+                      type="primary"
+                      size="mini"
+                      @click="handleExecutePallet(item)"
+                    >
+                      <i class="el-icon-position"></i>
+                      发送
+                    </el-button>
+                    <el-button
+                      size="mini"
+                      style="margin-left: 0px"
+                      @click="item.showSendPanel = false"
+                    >
+                      取消
+                    </el-button>
+                  </div>
+                </div>
+
+                <!-- 状态为3、4、5时显示发送状态 -->
+                <div
+                  class="sending-status"
+                  v-if="
+                    ['3', '4', '5'].includes(item.trayStatus) &&
+                    currentStorageTitle !== 'AGV2-2队列'
+                  "
                 >
-                  <i class="el-icon-delete"></i>
-                  移除
-                </el-button>
-              </template>
-            </div>
-          </div>
-          <div class="storage-card-content">
-            <template v-if="position.palletCode">
-              <div class="storage-info">
-                <span class="label">托盘码：</span>
-                <span class="value">{{ position.palletCode }}</span>
+                  <div class="status-text">
+                    <i class="el-icon-loading"></i>
+                    <span>正在发送中</span>
+                  </div>
+                  <div class="destination">
+                    <span class="label">目的地：</span>
+                    <span class="value">{{
+                      item.targetPosition || '未知'
+                    }}</span>
+                  </div>
+                </div>
               </div>
             </template>
             <template v-else>
@@ -116,79 +386,6 @@
         </div>
       </div>
     </el-drawer>
-
-    <!-- 空托盘缓存区抽屉 -->
-    <el-drawer
-      title="空托盘缓存区"
-      :visible.sync="emptyPalletStorageDrawerVisible"
-      direction="rtl"
-      size="400px"
-      :modal="false"
-      custom-class="storage-drawer"
-    >
-      <div class="storage-container">
-        <div
-          v-for="(position, index) in emptyPalletStoragePositions"
-          :key="index"
-          class="storage-card"
-        >
-          <div class="storage-card-header">
-            <span>位置 {{ position.name }}</span>
-            <div class="card-actions">
-              <template v-if="position.palletCode">
-                <el-button
-                  type="text"
-                  size="mini"
-                  class="danger-button"
-                  @click="handleRemovePallet(position)"
-                >
-                  <i class="el-icon-delete"></i>
-                  移除
-                </el-button>
-              </template>
-            </div>
-          </div>
-          <div class="storage-card-content">
-            <template v-if="position.palletCode">
-              <div class="storage-info">
-                <span class="label">托盘码：</span>
-                <span class="value">{{ position.palletCode }}</span>
-              </div>
-            </template>
-            <template v-else>
-              <div class="storage-info empty">
-                <span>空闲</span>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-    </el-drawer>
-
-    <!-- 添加托盘对话框 -->
-    <el-dialog
-      title="添加托盘"
-      :visible.sync="addPalletDialogVisible"
-      append-to-body
-      width="400px"
-      :close-on-click-modal="false"
-    >
-      <el-form :model="palletForm" ref="palletForm" :rules="palletRules">
-        <el-form-item label="托盘码" prop="palletCode">
-          <el-input
-            v-model="palletForm.palletCode"
-            placeholder="请输入托盘码"
-            maxlength="12"
-            show-word-limit
-          >
-          </el-input>
-        </el-form-item>
-      </el-form>
-      <div slot="footer" class="dialog-footer">
-        <el-button @click="addPalletDialogVisible = false">取 消</el-button>
-        <el-button type="primary" @click="confirmAddPallet">确 定</el-button>
-      </div>
-    </el-dialog>
 
     <!-- 添加测试按钮 -->
     <div class="test-button-container">
@@ -212,23 +409,11 @@
         <div class="test-section">
           <h3>上货扫码模拟</h3>
           <div class="test-form">
-            <el-form :model="testScanForm" label-width="70px" size="small">
+            <el-form label-width="70px" size="small">
               <el-form-item label="托盘码">
                 <el-input
-                  v-model="testScanForm.palletCode"
-                  placeholder="请输入12位数字托盘码"
-                ></el-input>
-              </el-form-item>
-              <el-form-item label="货品名">
-                <el-input
-                  v-model="testScanForm.productName"
-                  placeholder="请输入货品名称"
-                ></el-input>
-              </el-form-item>
-              <el-form-item label="批次号">
-                <el-input
-                  v-model="testScanForm.batchNumber"
-                  placeholder="请输入批次号"
+                  v-model="twoEightHundredPalletCode"
+                  placeholder="请输入托盘码"
                 ></el-input>
               </el-form-item>
               <el-form-item>
@@ -238,97 +423,531 @@
               </el-form-item>
             </el-form>
           </div>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="托盘码">
+                <el-input
+                  v-model="twoEightHundredPalletTestCode"
+                  placeholder="请输入托盘码"
+                ></el-input>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" size="small" @click="testDatabase"
+                  >数据库接口测试</el-button
+                >
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+
+        <!-- 添加AGV调度条件模拟 -->
+        <div class="test-section">
+          <h3>AGV调度条件模拟</h3>
+          <div class="test-form">
+            <el-form size="small">
+              <el-form-item>
+                <el-button
+                  type="warning"
+                  size="small"
+                  @click="simulateAGV1Signal"
+                  :loading="agvSignalLoading"
+                >
+                  模拟一楼提升机出口有货信号
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
         </div>
       </div>
     </el-dialog>
-
-    <!-- 添加悬浮日志面板 -->
-    <div class="floating-log-container">
-      <div class="log-header" @click="toggleLogPanel">
-        <span class="log-title">操作日志</span>
-        <div class="log-actions">
-          <el-button type="text" size="mini" @click.stop="toggleLogPanel">
-            <i
-              :class="isLogExpanded ? 'el-icon-arrow-down' : 'el-icon-arrow-up'"
-            ></i>
-          </el-button>
+    <!-- 托盘移动对话框 -->
+    <el-dialog
+      title="移动托盘"
+      :visible.sync="movePalletDialogVisible"
+      width="450px"
+      append-to-body
+      custom-class="move-pallet-dialog"
+      :close-on-click-modal="false"
+      @close="resetMovePalletDialog"
+    >
+      <div v-if="sourcePalletToMove">
+        <div class="target-pallet-list">
+          <el-radio-group
+            v-model="selectedTargetPalletIdForMove"
+            style="width: 100%"
+          >
+            <div
+              v-for="targetPallet in currentStoragePositions"
+              :key="targetPallet.id"
+              class="target-pallet-item"
+              :class="{
+                'is-source':
+                  sourcePalletToMove &&
+                  targetPallet.id === sourcePalletToMove.id
+              }"
+            >
+              <el-radio
+                :label="targetPallet.id"
+                border
+                size="small"
+                style="width: 100%"
+                :disabled="
+                  sourcePalletToMove &&
+                  targetPallet.id === sourcePalletToMove.id
+                "
+              >
+                位置: {{ targetPallet.queueName }}{{ targetPallet.queueNum }}
+                <span
+                  v-if="targetPallet.trayInfo"
+                  style="margin-left: 10px; color: #e6a23c"
+                >
+                  (当前: {{ targetPallet.trayInfo }})
+                </span>
+                <span v-else style="margin-left: 10px; color: #67c23a">
+                  (空闲)
+                </span>
+              </el-radio>
+            </div>
+          </el-radio-group>
         </div>
       </div>
-      <div class="log-content" ref="logContent" v-show="isLogExpanded">
-        <template v-if="logs.length > 0">
-          <div
-            v-for="(log, index) in logs"
-            :key="index"
-            class="log-item"
-            :class="log.type"
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="resetMovePalletDialog" size="small">取消</el-button>
+        <el-button
+          type="primary"
+          @click="confirmPalletMove"
+          size="small"
+          :disabled="!selectedTargetPalletIdForMove"
+          >确定</el-button
+        >
+      </span>
+    </el-dialog>
+
+    <!-- 添加AGV任务管理弹窗 -->
+    <el-dialog
+      title="AGV运行中任务管理"
+      :visible.sync="agvTaskDialogVisible"
+      width="980px"
+      append-to-body
+      :close-on-click-modal="false"
+      custom-class="agv-task-dialog"
+    >
+      <div class="agv-task-management">
+        <div class="task-header">
+          <el-tabs
+            v-model="currentAgvTaskFloor"
+            @tab-click="handleAgvTaskTabChange"
           >
-            <span class="log-time">{{ log.time }}</span>
-            <span class="log-message">{{ log.message }}</span>
-          </div>
-        </template>
-        <template v-else>
-          <div class="empty-log">
-            <i class="el-icon-document"></i>
-            <span>暂无日志</span>
-          </div>
-        </template>
+            <el-tab-pane
+              label="一层AGV运行中任务管理"
+              name="floor1"
+            ></el-tab-pane>
+            <el-tab-pane
+              label="二层AGV运行中任务管理"
+              name="floor2"
+            ></el-tab-pane>
+            <el-tab-pane
+              label="三层AGV运行中任务管理"
+              name="floor3"
+            ></el-tab-pane>
+          </el-tabs>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-refresh"
+            @click="refreshAgvTasks"
+            :loading="agvTasksLoading"
+          >
+            刷新
+          </el-button>
+        </div>
+
+        <div class="task-table">
+          <el-table
+            :data="currentAgvTasks"
+            border
+            style="width: 100%"
+            max-height="550px"
+            v-loading="agvTasksLoading"
+          >
+            <el-table-column
+              type="index"
+              label="序号"
+              width="60"
+              align="center"
+            ></el-table-column>
+            <el-table-column label="队列位置" min-width="100" align="center">
+              <template slot-scope="scope">
+                <span>{{ scope.row.queueName }}{{ scope.row.queueNum }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="trayInfo"
+              label="托盘号"
+              min-width="120"
+              align="center"
+            ></el-table-column>
+            <el-table-column
+              prop="trayInfoAdd"
+              label="产品描述"
+              min-width="220"
+            ></el-table-column>
+            <el-table-column
+              prop="robotTaskCode"
+              label="任务号"
+              min-width="140"
+              align="center"
+            ></el-table-column>
+            <el-table-column
+              prop="trayStatus"
+              label="当前状态"
+              min-width="180"
+              align="center"
+            >
+              <template slot-scope="scope">
+                <span>{{ getAgvTaskStatusText(scope.row.trayStatus) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" align="center">
+              <template slot-scope="scope">
+                <el-button
+                  v-if="scope.row.isWaitCancel !== '1'"
+                  type="danger"
+                  size="mini"
+                  @click="cancelAgvTask(scope.row)"
+                >
+                  取消执行
+                </el-button>
+                <span v-else class="waiting-cancel-text">正在等待取消执行</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
-    </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
+import HttpUtil from '@/utils/HttpUtil';
+import HttpUtilAGV from '@/utils/HttpUtilAGV';
+import moment from 'moment';
+import { ipcRenderer } from 'electron';
 export default {
   name: 'FloorFirst',
   data() {
     return {
+      currentStorageTitle: '', // 新增：用于抽屉标题
       palletStorageDrawerVisible: false,
-      emptyPalletStorageDrawerVisible: false,
-      addPalletDialogVisible: false,
-      palletForm: {
-        palletCode: ''
+      currentStorageArea: 'A', // 当前选中的缓存区
+      palletStorageAreas: {
+        A: [],
+        B: [],
+        C: []
       },
-      palletRules: {
-        palletCode: [
-          { required: true, message: '请输入托盘码', trigger: 'blur' },
-          {
-            pattern: /^\d{12}$/,
-            message: '托盘码必须为12位数字',
-            trigger: 'blur'
-          }
-        ]
-      },
-      // 托盘缓存区位置数据
-      palletStoragePositions: Array.from({ length: 10 }, (_, i) => ({
-        name: `P${i + 1}`,
-        palletCode: null
-      })),
-      // 空托盘缓存区位置数据
-      emptyPalletStoragePositions: Array.from({ length: 4 }, (_, i) => ({
-        name: `E${i + 1}`,
-        palletCode: null
-      })),
       testPanelVisible: false,
-      testScanForm: {
-        palletCode: '',
-        productName: '',
-        batchNumber: ''
-      },
-      // 添加上货扫码区域信息
       scanInfo: {
-        palletCode: '',
-        productName: '',
-        batchNumber: ''
+        descrC: '',
+        mudidi: ''
       },
-      // 添加日志数据
-      logs: [],
-      isLogExpanded: false // 添加日志面板展开状态
+      activeLogType: 'running',
+      runningLogs: [], // 修改为空数组
+      alarmLogs: [], // 修改为空数组
+      scheduleData: [
+        { name: '三楼灌装线A', plan: 0, completed: 0 },
+        { name: '三楼灌装线B', plan: 0, completed: 0 },
+        { name: '一楼灌装线A', plan: 0, completed: 0 },
+        { name: '一楼灌装线B', plan: 0, completed: 0 }
+      ],
+      logId: 0, // 添加日志ID计数器
+      // 输送线当前运行状态
+      conveyorStatus: {
+        bit0: '0', // PLC系统运行中运行信号
+        bit1: '0', // PLC系统故障信号
+        bit2: '0', // 1#机器人故障信号
+        bit3: '0', // 2#机器人故障信号
+        bit4: '0', // 去三楼托盘提升机故障信号
+        bit5: '0', // 去一楼托盘提升机故障信号
+        bit6: '0', // 去三楼灌装车间A输送线故障信号
+        bit7: '0', // 去三楼灌装车间B输送线故障信号
+        bit8: '0', // 去一楼灌装车间A输送线故障信号
+        bit9: '0' // 去一楼灌装车间B输送线故障信号
+      },
+      // 1#机器人状态
+      robotStatus: {
+        bit0: '0', // 值为1时，1#机器人A缺货
+        bit1: '0', // 值为1时，1#机器人A需要清理空托盘
+        bit2: '0', // 值为1时，1#机器人B缺货
+        bit3: '0', // 值为1时，1#机器人B需要清理空托盘
+        bit4: '0', // 值为1时，1#机器人C缺货
+        bit5: '0', // 值为1时，1#机器人C需要清理空托盘
+        bit6: '0', // 值为1时，1#机器人D缺货
+        bit7: '0', // 值为1时，1#机器人D需要清理空托盘
+        bit8: '0', // 值为1时，1#机器人E缺货
+        bit9: '0', // 值为1时，1#机器人E需要清理空托盘
+        bit10: '0', // 值为1时，去三楼灌装车间A输送线启动中
+        bit11: '0' // 值为1时，去三楼灌装车间B输送线启动中
+      },
+      // 2#机器人状态
+      robotStatus2: {
+        bit0: '0', // 值为1时，2#机器人A缺货
+        bit1: '0', // 值为1时，2#机器人A需要清理空托盘
+        bit2: '0', // 值为1时，2#机器人B缺货
+        bit3: '0', // 值为1时，2#机器人B需要清理空托盘
+        bit4: '0', // 值为1时，2#机器人C缺货
+        bit5: '0', // 值为1时，2#机器人C需要清理空托盘
+        bit6: '0', // 值为1时，2#机器人D缺货
+        bit7: '0', // 值为1时，2#机器人D需要清理空托盘
+        bit8: '0', // 值为1时，2#机器人E缺货
+        bit9: '0', // 值为1时，2#机器人E需要清理空托盘
+        bit10: '0', // 值为1时，去一楼灌装车间A输送线启动中
+        bit11: '0' // 值为1时，去一楼灌装车间B输送线启动中
+      },
+      // AGV调度条件
+      agvScheduleCondition: {
+        bit0: '0', // 2800转盘处允许接货（同时允许上位机读取扫码结果）
+        bit1: '0', // 2500接驳口允许接货（同时允许上位机读取扫码结果）
+        bit2: '0', // AGV2-2空闲允许放货
+        bit3: '0', // AGV2-3空闲允许放货
+        bit4: '0', // AGV3-1有货需AGV接走（三楼提升机出口）
+        bit5: '0' // AGV1-1有货需AGV接走（一楼提升机出口）
+      },
+      // 2800接货处条码
+      twoEightHundredPalletCode: '',
+      // 2500接货处条码
+      twoFiveHundredPalletCode: '',
+      isRefreshing: false,
+      agvSchedule: {
+        startPosition: '',
+        endPosition: '',
+        status: 'idle' // idle没任务 singleRunning单次任务执行中 cycleRunning多次任务执行中
+      },
+      // 新增起点点位列表
+      startAgvPositions: [
+        { value: 'AGV2-1' },
+        { value: 'AGV1-1' },
+        { value: 'AGV3-1' }
+      ],
+      // 新增终点点位列表
+      endAgvPositions: [{ value: 'AGV2-2' }, { value: 'AGV2-3' }],
+      // 定义一个map，可以通过type获取到code
+      agvCodeMap: {
+        'AGV2-1': '102',
+        'AGV2-2': '201',
+        'AGV2-3': '301',
+        '2500输送线': '101',
+        'AGV1-1': '202',
+        'AGV3-1': '302'
+      },
+      twoEightHundredPalletTestCode: '',
+      agvSignalLoading: false,
+      // 托盘移动功能所需数据
+      movePalletDialogVisible: false,
+      sourcePalletToMove: null,
+      selectedTargetPalletIdForMove: null,
+      agvTaskDialogVisible: false,
+      currentAgvTaskFloor: 'floor1',
+      currentAgvTasks: [],
+      agvTasksLoading: false
     };
+  },
+  computed: {
+    getStatusClass() {
+      return (status) => {
+        const statusClasses = {
+          0: 'status-idle',
+          1: 'status-processing',
+          2: 'status-completed'
+        };
+        return statusClasses[status];
+      };
+    },
+    getStatusIcon() {
+      return (status) => {
+        const statusIcons = {
+          0: 'el-icon-time',
+          1: 'el-icon-loading',
+          2: 'el-icon-check'
+        };
+        return statusIcons[status];
+      };
+    },
+    currentStoragePositions() {
+      return this.palletStorageAreas[this.currentStorageArea] || [];
+    },
+    currentLogs() {
+      return this.activeLogType === 'running'
+        ? this.runningLogs
+        : this.alarmLogs;
+    },
+    unreadAlarms() {
+      return this.alarmLogs.filter((log) => log.unread).length;
+    }
   },
   mounted() {
     this.initializeMarkers();
+    this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
+    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
+    //   // 使用位运算优化赋值
+    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+
+    //   // 输送线当前运行状态
+    //   let word2 = this.convertToWord(values.DBW2);
+    //   this.conveyorStatus.bit0 = getBit(word2, 8);
+    //   this.conveyorStatus.bit1 = getBit(word2, 9);
+    //   this.conveyorStatus.bit2 = getBit(word2, 10);
+    //   this.conveyorStatus.bit3 = getBit(word2, 11);
+    //   this.conveyorStatus.bit4 = getBit(word2, 12);
+    //   this.conveyorStatus.bit5 = getBit(word2, 13);
+    //   this.conveyorStatus.bit6 = getBit(word2, 14);
+    //   this.conveyorStatus.bit7 = getBit(word2, 15);
+    //   this.conveyorStatus.bit8 = getBit(word2, 0);
+    //   this.conveyorStatus.bit9 = getBit(word2, 1);
+
+    //   // 1#机器人状态
+    //   let word4 = this.convertToWord(values.DBW4);
+    //   this.robotStatus.bit0 = getBit(word4, 8);
+    //   this.robotStatus.bit1 = getBit(word4, 9);
+    //   this.robotStatus.bit2 = getBit(word4, 10);
+    //   this.robotStatus.bit3 = getBit(word4, 11);
+    //   this.robotStatus.bit4 = getBit(word4, 12);
+    //   this.robotStatus.bit5 = getBit(word4, 13);
+    //   this.robotStatus.bit6 = getBit(word4, 14);
+    //   this.robotStatus.bit7 = getBit(word4, 15);
+    //   this.robotStatus.bit8 = getBit(word4, 0);
+    //   this.robotStatus.bit9 = getBit(word4, 1);
+    //   this.robotStatus.bit10 = getBit(word4, 2);
+    //   this.robotStatus.bit11 = getBit(word4, 3);
+
+    //   // 2#机器人状态
+    //   let word6 = this.convertToWord(values.DBW6);
+    //   this.robotStatus2.bit0 = getBit(word6, 8);
+    //   this.robotStatus2.bit1 = getBit(word6, 9);
+    //   this.robotStatus2.bit2 = getBit(word6, 10);
+    //   this.robotStatus2.bit3 = getBit(word6, 11);
+    //   this.robotStatus2.bit4 = getBit(word6, 12);
+    //   this.robotStatus2.bit5 = getBit(word6, 13);
+    //   this.robotStatus2.bit6 = getBit(word6, 14);
+    //   this.robotStatus2.bit7 = getBit(word6, 15);
+    //   this.robotStatus2.bit8 = getBit(word6, 0);
+    //   this.robotStatus2.bit9 = getBit(word6, 1);
+    //   this.robotStatus2.bit10 = getBit(word6, 2);
+    //   this.robotStatus2.bit11 = getBit(word6, 3);
+
+    //   // AGV调度条件
+    //   let word8 = this.convertToWord(values.DBW8);
+    //   this.agvScheduleCondition.bit0 = getBit(word8, 8);
+    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
+    //   this.agvScheduleCondition.bit2 = getBit(word8, 10);
+    //   this.agvScheduleCondition.bit3 = getBit(word8, 11);
+    //   this.agvScheduleCondition.bit4 = getBit(word8, 12);
+    //   this.agvScheduleCondition.bit5 = getBit(word8, 13);
+
+    //   // 2800接货处条码
+    //   this.twoEightHundredPalletCode = values.DBB10 ?? '';
+    //   // 2500接货处条码
+    //   this.twoFiveHundredPalletCode = values.DBB20 ?? '';
+    // });
+  },
+  watch: {
+    // 监听agvScheduleCondition.bit0,
+    'agvScheduleCondition.bit0': {
+      async handler(newVal) {
+        if (newVal === '1') {
+          this.addLog(`2800接货处扫码数据：${this.twoEightHundredPalletCode}`);
+          // 自动触发AGV运输任务，从2800到C区缓存位
+          this.getTrayInfo(this.twoEightHundredPalletCode);
+        }
+      }
+    },
+    // 监听 agvScheduleCondition.bit5，如果变为1，则出发一段逻辑，我自己写
+    'agvScheduleCondition.bit5': {
+      async handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('检测到一楼提升机出口有货需AGV接走');
+          // 自动触发AGV运输任务，从AGV1-1到C区缓存位
+          this.handleAGV1ToStorage();
+        }
+      }
+    }
   },
   methods: {
+    getStatusText(status) {
+      const statusTexts = {
+        0: '空闲中',
+        1: '处理中'
+      };
+      return statusTexts[status];
+    },
+    // 处理一楼提升机出口有货需AGV接走的方法
+    async handleAGV1ToStorage() {
+      try {
+        // 查询C队列托盘情况，查找第一个空闲的托盘位置
+        const params = {
+          queueName: 'AGV2-2'
+        };
+        const res = await HttpUtil.post('/queue_info/queryQueueList', params);
+        // 把trayStatus 为5的托盘保留下来
+        const trayList = res.data.filter((item) => item.trayStatus === '5');
+        if (trayList && trayList.length > 0) {
+          // 输出日志
+          this.addLog(`AGV2-2托盘出库信息：${JSON.stringify(trayList)}`);
+          // 调用AGV过来运货
+          const robotTaskCode = await this.sendAgvCommand(
+            'PF-FMR-COMMON-JH4',
+            '202',
+            trayList[0].targetPosition
+          );
+          if (robotTaskCode !== '') {
+            // 更新托盘状态
+            const param = {
+              id: trayList[0].id,
+              trayStatus: '6',
+              robotTaskCode
+            };
+            await HttpUtil.post('/queue_info/update', param)
+              .then((resUpdate) => {
+                if (resUpdate.data == 1) {
+                  this.addLog(
+                    `已给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务`
+                  );
+                } else {
+                  this.addLog(
+                    `给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务失败`
+                  );
+                }
+              })
+              .catch((err) => {
+                this.addLog(
+                  `给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务失败：${err.message}`
+                );
+              });
+          }
+        }
+      } catch (err) {
+        this.addLog(
+          `处理一楼提升机出口货物失败: ${err.message || '未知错误'}`,
+          'alarm'
+        );
+      }
+    },
+    // 移除托盘
+    async deleteAgv22Pallet(item) {
+      const params = {
+        id: item.id
+      };
+      await HttpUtil.post('/queue_info/delete', params)
+        .then((res) => {
+          if (res.data == 1) {
+            this.addLog(`AGV2-2托盘出库成功：${item.trayInfo}`);
+          } else {
+            this.addLog(`AGV2-2托盘出库失败：${item.trayInfo}`);
+          }
+        })
+        .catch((err) => {
+          this.addLog(`AGV2-2托盘出库失败：${err.message}`);
+        });
+    },
     initializeMarkers() {
       this.$nextTick(() => {
         this.updateMarkerPositions();
@@ -342,9 +961,8 @@ export default {
         if (!imageWrapper) return;
 
         const markers = imageWrapper.querySelectorAll(
-          '.marker, .marker-with-panel, .marker-with-button'
+          '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button'
         );
-        const imageRect = image.getBoundingClientRect();
         const wrapperRect = imageWrapper.getBoundingClientRect();
 
         // 计算图片的实际显示区域
@@ -369,61 +987,49 @@ export default {
     },
     beforeDestroy() {
       window.removeEventListener('resize', this.updateMarkerPositions);
+      this.stopPalletMovePolling(); // 组件销毁前停止轮询
     },
-    handlePalletStorageClick() {
+    handlePalletStorageClick(area, title) {
+      this.currentStorageArea = area;
+      this.currentStorageTitle = title; // 设置抽屉标题
+      // 打开抽屉前重新查询数据
+      this.loadPalletStorageByArea(area);
       this.palletStorageDrawerVisible = true;
     },
-    handleEmptyPalletStorageClick() {
-      this.emptyPalletStorageDrawerVisible = true;
-    },
-    // 获取可用的托盘缓存位置
-    getAvailablePalletPosition() {
-      return this.palletStoragePositions.find((pos) => !pos.palletCode);
-    },
-    // 分配托盘到空位置
-    assignPalletToPosition(palletCode) {
-      const availablePosition = this.getAvailablePalletPosition();
-      if (availablePosition) {
-        availablePosition.palletCode = palletCode;
-        return true;
-      }
-      return false;
-    },
-    handlePalletCardClick(position) {
-      // 检查是否有可用的空托盘位置
-      const availableEmptyPosition = this.emptyPalletStoragePositions.find(
-        (pos) => !pos.palletCode
-      );
+    // 加载指定区域的托盘存储数据
+    loadPalletStorageByArea(area) {
+      this.isRefreshing = true;
 
-      if (!availableEmptyPosition) {
-        this.$message.warning('空托盘区域已满，无法移动');
-        this.addLog('error', '空托盘区域已满，无法移动托盘');
-        return;
-      }
+      const params = {
+        queueName: area
+      };
 
-      this.$confirm('确认将托盘移至空托盘区吗？', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-        .then(() => {
-          // 将托盘移动到空托盘位置
-          availableEmptyPosition.palletCode = position.palletCode;
-          this.addLog(
-            'success',
-            `托盘 ${position.palletCode} 从位置 ${position.name} 移动到空托盘区位置 ${availableEmptyPosition.name}`
-          );
-
-          // 清空原位置
-          position.palletCode = null;
-          this.$message.success('托盘已成功移至空托盘区');
+      HttpUtil.post('/queue_info/queryQueueList', params)
+        .then((res) => {
+          if (res.data && Array.isArray(res.data)) {
+            // 为每个托盘项添加showSendPanel属性
+            const dataWithSendPanel = res.data.map((item) => {
+              return {
+                ...item,
+                showSendPanel: false
+              };
+            });
+            // 如果API返回的数据已经是格式化好的，直接使用
+            this.$set(this.palletStorageAreas, area, dataWithSendPanel);
+          } else {
+            this.$set(this.palletStorageAreas, area, []); // 清空当前区域数据，显示加载状态
+            // 如果API返回的数据需要格式化，进行处理
+            this.$message.warning(`获取${area}区托盘数据格式不正确`);
+          }
         })
-        .catch(() => {});
-    },
-    handleAddPallet(position) {
-      this.selectedPosition = position;
-      this.palletForm.palletCode = '';
-      this.addPalletDialogVisible = true;
+        .catch((err) => {
+          console.error(`获取${area}区托盘数据失败:`, err);
+          this.$message.error(`获取${area}区托盘数据失败`);
+          this.$set(this.palletStorageAreas, area, []); // 清空当前区域数据，显示加载状态
+        })
+        .finally(() => {
+          this.isRefreshing = false;
+        });
     },
     handleRemovePallet(position) {
       this.$confirm('确认移除该托盘码吗？', '提示', {
@@ -432,546 +1038,1811 @@ export default {
         type: 'warning'
       })
         .then(() => {
-          position.palletCode = null;
-          this.$message.success('托盘已移除');
+          // 调用API更新数据库中的托盘信息
+          HttpUtil.post('/queue_info/update', {
+            id: position.id,
+            trayInfo: '',
+            trayStatus: '',
+            robotTaskCode: '',
+            trayInfoAdd: '',
+            targetPosition: ''
+          })
+            .then((res) => {
+              if (res.data == 1) {
+                this.addLog(
+                  `${position.trayInfo}已从${this.currentStorageArea}区${position.queueName}${position.queueNum}移除托盘`
+                );
+                // 重新查询
+                this.loadPalletStorageByArea(this.currentStorageArea);
+              } else {
+                this.addLog(
+                  `移除托盘失败：${position.queueName}${position.queueNum}`
+                );
+              }
+            })
+            .catch((err) => {
+              console.error(`${position.trayInfo}移除托盘失败:`, err);
+              this.$message.error('移除托盘失败，请重试');
+            });
         })
         .catch(() => {});
-    },
-    confirmAddPallet() {
-      this.$refs.palletForm.validate((valid) => {
-        if (valid) {
-          if (this.selectedPosition) {
-            this.selectedPosition.palletCode = this.palletForm.palletCode;
-            this.addPalletDialogVisible = false;
-            this.selectedPosition = null;
-            this.$message.success('托盘添加成功');
-          }
-        }
-      });
     },
     showTestPanel() {
       this.testPanelVisible = true;
     },
+    testDatabase() {
+      if (!this.twoEightHundredPalletTestCode) {
+        this.$message.warning('请填写完整的测试托盘码');
+        return;
+      }
+      // 调用接口读取托盘信息
+      this.getTrayInfo(this.twoEightHundredPalletTestCode);
+      // 关闭测试面板
+      this.testPanelVisible = false;
+    },
     simulateScan() {
-      if (
-        !this.testScanForm.palletCode ||
-        !this.testScanForm.productName ||
-        !this.testScanForm.batchNumber
-      ) {
+      if (!this.twoEightHundredPalletCode) {
         this.$message.warning('请填写完整的扫码信息');
         return;
       }
-
-      // 更新上货扫码区域的信息
-      this.scanInfo = {
-        palletCode: this.testScanForm.palletCode,
-        productName: this.testScanForm.productName,
-        batchNumber: this.testScanForm.batchNumber
+      // 调用接口读取托盘信息
+      this.getTrayInfo(this.twoEightHundredPalletCode);
+      // 关闭测试面板
+      this.testPanelVisible = false;
+    },
+    getTrayInfo(trayCode) {
+      const params = {
+        traceid: trayCode.trim(),
+        zt: 'N',
+        cheijian: '2800'
+      };
+      HttpUtil.post('/order_info/selectList', params)
+        .then((res) => {
+          // this.queues[0]： 上货区
+          if (res.data && res.data.length > 0) {
+            // 根据托盘信息给agv小车发送指令
+            this.addLog(`读取托盘成功：${JSON.stringify(res.data)}`);
+            this.scanInfo.mudidi = res.data[0].mudidi;
+            this.scanInfo.descrC = res.data[0].descrC;
+            // 处理扫码后托盘逻辑
+            this.dealScanCode(trayCode, res.data[0]);
+          } else {
+            // 没查询到货物信息，直接报警
+            this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+          }
+        })
+        .catch((err) => {
+          this.$message.error('查询托盘失败，请重试' + err);
+          // 没查询到货物信息，直接报警
+          this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+        });
+    },
+    dealScanCode(trayCode, wmsInfo) {
+      // 判断目的地-先不判断，先直接写死进入C队列
+      // 查询C队列托盘情况，查找第一个空闲的托盘位置
+      // 如果wmsInfo.mudidi为'2800-1'，进入C队列
+      // 如果wmsInfo.mudidi为'2800-2'，进入A队列
+      // 如果wmsInfo.mudidi为'2800-3'，进入B队列
+      // 如果没有上面，则return 并输出日志
+      let queueName = '';
+      if (wmsInfo.mudidi === '2800-1') {
+        queueName = 'C';
+      } else if (wmsInfo.mudidi === '2800-2') {
+        queueName = 'A';
+      } else if (wmsInfo.mudidi === '2800-3') {
+        queueName = 'B';
+      } else {
+        this.addLog(
+          `托盘入库失败：${trayCode}，目的地为${wmsInfo.mudidi}，不支持的入库目的地`
+        );
+        return;
+      }
+      HttpUtil.post('/queue_info/queryQueueList', {
+        queueName
+      })
+        .then(async (res) => {
+          if (res.data && res.data.length > 0) {
+            // 查找第一个空闲的托盘位置
+            const emptyPosition = res.data.find(
+              (item) => item.trayInfo === null || item.trayInfo === ''
+            );
+            if (emptyPosition) {
+              // 说明有空缓存位置
+              // 根据托盘信息给AGV小车发送指令
+              const robotTaskCode = await this.sendAgvCommand(
+                'PF-FMR-COMMON-JH1',
+                '102',
+                emptyPosition.queueName + emptyPosition.queueNum
+              );
+              if (robotTaskCode !== '') {
+                // 更新托盘信息
+                const param = {
+                  id: emptyPosition.id,
+                  trayInfo: trayCode,
+                  trayStatus: '0',
+                  robotTaskCode,
+                  trayInfoAdd: wmsInfo.descrC
+                };
+                HttpUtil.post('/queue_info/update', param)
+                  .then(() => {
+                    this.$message.success('托盘已入库');
+                    this.addLog(
+                      `托盘已入库：${trayCode}, 缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}`
+                    );
+                    // 回更WMS信息
+                    HttpUtil.post('/order_info/update', {
+                      uuid: wmsInfo.uuid,
+                      zt: 'Y'
+                    })
+                      .then(() => {
+                        this.addLog(`已回更WMS信息成功`);
+                      })
+                      .catch((err) => {
+                        this.addLog(`托盘入库成功，回更WMS信息失败：${err}`);
+                      });
+                  })
+                  .catch((err) => {
+                    this.$message.error('托盘入库失败，请重试');
+                    this.addLog(`托盘入库失败：${trayCode},${err}`);
+                  });
+              }
+            } else {
+              this.$message.error('缓存区没有空闲位置');
+              this.addLog(`${trayCode} 托盘入库失败，缓存区没有空闲位置`);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('查询C队列托盘情况失败:', err);
+        });
+    },
+    switchStorageArea(area) {
+      this.currentStorageArea = area;
+      // 切换区域时重新加载数据
+      this.loadPalletStorageByArea(area);
+    },
+    // 添加新的日志方法
+    addLog(message, type = 'running') {
+      const log = {
+        id: this.logId++,
+        type,
+        message,
+        timestamp: moment().format('YYYY-MM-DD HH:mm:ss'),
+        unread: type === 'alarm'
       };
 
-      // 添加扫码日志
+      if (type === 'running') {
+        this.runningLogs.unshift(log);
+        // 保持日志数量在合理范围内
+        if (this.runningLogs.length > 100) {
+          this.runningLogs.pop();
+        }
+      } else {
+        this.alarmLogs.unshift(log);
+        if (this.alarmLogs.length > 100) {
+          this.alarmLogs.pop();
+        }
+      }
+    },
+    updateSchedulePlan(index) {
+      // 更新排班计划
       this.addLog(
-        'info',
-        `扫码成功：托盘码 ${this.scanInfo.palletCode}，货品 ${this.scanInfo.productName}，批次 ${this.scanInfo.batchNumber}`
+        `已更新${this.scheduleData[index].name}的计划数量为${this.scheduleData[index].plan}`
       );
-
-      // 查找托盘缓存区的空位
-      const availablePosition = this.palletStoragePositions.find(
-        (pos) => !pos.palletCode
-      );
-
-      if (!availablePosition) {
-        this.$message.error('托盘缓存区已满，无法分配位置');
-        this.addLog('error', '托盘缓存区已满，无法分配位置');
+      // 这里可以添加将计划保存到后端的逻辑
+    },
+    getProgressColor(completed, plan) {
+      // 根据完成度计算进度条颜色
+      const percentage = plan === 0 ? 0 : (completed / plan) * 100;
+      if (percentage < 30) return '#909399'; // 灰色
+      if (percentage < 70) return '#e6a23c'; // 黄色
+      return '#67c23a'; // 绿色
+    },
+    convertToWord(value) {
+      if (value < 0) {
+        return (value & 0xffff) >>> 0; // 负数转换为无符号的16位整数
+      } else {
+        return value; // 非负数保持不变
+      }
+    },
+    handleAgvModeChange(val) {
+      if (!this.agvSchedule.startPosition || !this.agvSchedule.endPosition) {
+        this.$message.warning('请先选择起点和终点');
+        return;
+      }
+      // 判断起点和终点是否相同
+      if (this.agvSchedule.startPosition === this.agvSchedule.endPosition) {
+        this.$message.warning('起点和终点不能相同');
         return;
       }
 
-      // 分配托盘到空位置
-      availablePosition.palletCode = this.testScanForm.palletCode;
-      this.addLog(
-        'success',
-        `托盘已分配到缓存区位置 ${availablePosition.name}`
-      );
-
-      // 清空表单
-      this.testScanForm = {
-        palletCode: '',
-        productName: '',
-        batchNumber: ''
-      };
-
-      this.$message.success(
-        `扫码成功，托盘已分配到位置 ${availablePosition.name}`
-      );
-
-      // 自动打开托盘缓存区抽屉
-      this.palletStorageDrawerVisible = true;
-    },
-    // 添加日志方法
-    addLog(type, message) {
-      const time = new Date().toLocaleTimeString();
-      this.logs.push({ time, type, message });
-      // 保持最新的100条日志
-      if (this.logs.length > 100) {
-        this.logs.shift();
+      // 判断是否在单次执行
+      if (this.agvSchedule.status === 'singleRunning') {
+        this.$message.warning('当前正在单次执行，请先等待单次执行完成');
+        return;
       }
-      // 滚动到最新日志
-      this.$nextTick(() => {
-        if (this.$refs.logContent) {
-          this.$refs.logContent.scrollTop = this.$refs.logContent.scrollHeight;
+    },
+
+    async handleSingleModeChange() {
+      if (!this.agvSchedule.startPosition || !this.agvSchedule.endPosition) {
+        this.$message.warning('请先选择起点和终点');
+        return;
+      }
+      // 判断起点和终点是否相同
+      if (this.agvSchedule.startPosition === this.agvSchedule.endPosition) {
+        this.$message.warning('起点和终点不能相同');
+        return;
+      }
+      // 判断当前是否在循环执行
+      if (this.agvSchedule.status === 'cycleRunning') {
+        this.$message.warning('当前正在循环执行，请先停止循环执行');
+        return;
+      }
+      // PF-FMR-COMMON-JH	转盘-输送线，起点终点都与plc进行安全交互
+      // PF-FMR-COMMON-JH1 转盘-缓存区，只有起点与plc进行安全交互
+      // PF-FMR-COMMON-JH2 缓存区-输送线，只有终点与plc进行安全交互
+      // 判断起点类型
+      let taskType = '';
+      let fromSiteCode = '';
+      let toSiteCode = '';
+
+      if (this.agvSchedule.startPosition === 'AGV2-1') {
+        // 说明起点是转盘
+        fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
+
+        if (this.agvSchedule.endPosition.includes('AGV')) {
+          // 转盘-输送线，起点终点都与plc进行安全交互
+          // todo 这种方式先不处理占位问题
+          taskType = 'PF-FMR-COMMON-JH';
+          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+          this.agvSchedule.status = 'singleRunning';
+          // 调用发送AGV指令方法
+          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+        } else {
+          // 转盘-缓存区，只有起点与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH1';
+          toSiteCode = this.agvSchedule.endPosition;
+          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
+            queueName: toSiteCode.charAt(0),
+            queueNum: toSiteCode.substring(1)
+          });
+          if (res.data && res.data.length > 0) {
+            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
+              this.agvSchedule.status = 'singleRunning';
+              // 调用发送AGV指令方法
+              const robotTaskCode = await this.sendAgvCommand(
+                taskType,
+                fromSiteCode,
+                toSiteCode
+              );
+              if (robotTaskCode !== '') {
+                // 转盘-缓存区
+                const param = {
+                  id: res.data[0].id,
+                  trayInfo: '1111111',
+                  trayStatus: '0',
+                  robotTaskCode,
+                  trayInfoAdd: '临时托盘'
+                };
+                HttpUtil.post('/queue_info/update', param)
+                  .then((returnRes) => {
+                    if (returnRes.data == 1) {
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}成功！`);
+                      this.$message.success(
+                        `手动调度去往缓存区：${toSiteCode}成功！`
+                      );
+                    } else {
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
+                      this.$message.error(
+                        `手动调度去往缓存区：${toSiteCode}失败！`
+                      );
+                    }
+                  })
+                  .catch((err) => {
+                    this.addLog(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                    this.$message.error(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                  });
+              }
+            } else {
+              this.$message.error(
+                `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+              );
+              this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
+            }
+          } else {
+            this.addLog('没有此缓存区位置，请检查输入的缓存区位置是否正确');
+            this.$message.error(
+              '没有此缓存区位置，请检查输入的缓存区位置是否正确'
+            );
+          }
+        }
+      } else if (
+        this.agvSchedule.startPosition === 'AGV1-1' ||
+        this.agvSchedule.startPosition === 'AGV3-1'
+      ) {
+        // 说明起点是AGV1-1或AGV3-1
+        fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
+        if (
+          (this.agvSchedule.startPosition === 'AGV1-1' &&
+            this.agvSchedule.endPosition.includes('D')) ||
+          (this.agvSchedule.startPosition === 'AGV3-1' &&
+            this.agvSchedule.endPosition.includes('E'))
+        ) {
+          // AGV1-1-输送线，只有终点与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH4';
+          toSiteCode = this.agvSchedule.endPosition;
+          this.agvSchedule.status = 'singleRunning';
+          // 调用发送AGV指令方法
+          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+        } else {
+          // 目前没有这种类型，报错
+          taskType = 'ERROR';
+          this.addLog(
+            `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
+          );
+          this.$message.error(
+            `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
+          );
+        }
+      } else {
+        // 说明起点是缓存区
+        fromSiteCode = this.agvSchedule.startPosition;
+        if (this.agvSchedule.endPosition.includes('AGV')) {
+          // 缓存区-输送线，只有终点与plc进行安全交互
+          taskType = 'PF-FMR-COMMON-JH2';
+          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+          // 判断起点缓存位有没有托盘占位，如果没有直接报错提示，并返回
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            // fromSiteCode的格式是C1,C2... 截取fromSiteCode第一位为queueName，后面为queueNum
+            queueName: fromSiteCode.charAt(0),
+            queueNum: fromSiteCode.substring(1)
+          });
+          if (res.data && res.data.length > 0) {
+            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
+              this.addLog(`起点：${fromSiteCode}没有信息，请扫码录入信息。`);
+              this.$message.error(
+                `起点：${fromSiteCode}没有信息，请扫码录入信息。`
+              );
+            } else {
+              this.agvSchedule.status = 'singleRunning';
+              // 调用发送AGV指令方法
+              const robotTaskCode = await this.sendAgvCommand(
+                taskType,
+                fromSiteCode,
+                toSiteCode
+              );
+              if (robotTaskCode !== '') {
+                // 缓存区-输送线
+                const param = {
+                  id: res.data[0].id,
+                  trayStatus: '3', // -在缓存区等待AGV取货
+                  robotTaskCode,
+                  targetPosition: this.agvSchedule.endPosition // 保存目的地信息
+                };
+                HttpUtil.post('/queue_info/update', param)
+                  .then((returnRes) => {
+                    if (returnRes.data == 1) {
+                      this.addLog(
+                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+                      );
+                      this.$message.success(
+                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+                      );
+                    } else {
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
+                      this.$message.error(
+                        `手动调度去往缓存区：${toSiteCode}失败！`
+                      );
+                    }
+                  })
+                  .catch((err) => {
+                    this.addLog(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                    this.$message.error(
+                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                    );
+                  });
+              }
+            }
+          } else {
+            this.$message.error(
+              '未查到此起点信息，请检查输入的缓存区位置是否正确'
+            );
+            this.addLog('未查到此起点信息，请检查输入的缓存区位置是否正确');
+          }
+        } else {
+          // 缓存区-缓存区
+          taskType = 'PF-FMR-COMMON-PY';
+          toSiteCode = this.agvSchedule.endPosition;
+          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
+            queueName: toSiteCode.charAt(0),
+            queueNum: toSiteCode.substring(1)
+          });
+          if (res.data && res.data.length > 0) {
+            this.$message.error(
+              `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+            );
+            this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
+            return;
+          }
+          this.agvSchedule.status = 'singleRunning';
+          // 调用发送AGV指令方法
+          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+        }
+      }
+    },
+    stopAgvSchedule() {
+      if (this.agvSchedule.status === 'cycleRunning') {
+        this.agvSchedule.status = 'idle';
+        this.addLog('AGV调度已停止(循环)');
+      }
+    },
+    async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
+      // 测试用，返回当前时间戳
+      // this.addLog(
+      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      // );
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        taskType: taskType,
+        targetRoute: [
+          {
+            type: 'SITE',
+            code: fromSiteCode
+          },
+          {
+            type: 'SITE',
+            code: toSiteCode
+          }
+        ]
+      };
+      this.addLog(
+        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/submit',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodeNotMatch':
+              errorMsg = '机器人编号与任务不匹配，无法调度';
+              break;
+            case 'Err_TargetRouteError':
+              errorMsg = '任务路径参数有误';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
+    },
+    startPalletMovePolling() {
+      if (this.pollingTimerCtoAGV22) {
+        clearInterval(this.pollingTimerCtoAGV22);
+      }
+      // 每3秒轮询一次，并立即执行一次
+      this.pollForPalletsToMove();
+      this.pollingTimerCtoAGV22 = setInterval(this.pollForPalletsToMove, 5000);
+      this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已启动。');
+    },
+
+    stopPalletMovePolling() {
+      if (this.pollingTimerCtoAGV22) {
+        clearInterval(this.pollingTimerCtoAGV22);
+        this.pollingTimerCtoAGV22 = null;
+        this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已停止。');
+      }
+    },
+    // 轮询C区有没有能够移到AGV2-2队列的托盘
+    pollForPalletsToMove() {
+      HttpUtil.post('/queue_info/queryQueueList', {}).then((res) => {
+        if (res && res.data.length > 0) {
+          // 过滤出C队列状态为5的托盘
+          const status5Pallets = res.data.filter(
+            (item) => item.trayStatus === '5' && item.queueName === 'C'
+          );
+          if (status5Pallets.length > 0) {
+            this.insertPalletToAGV22(status5Pallets);
+          }
+
+          // 过滤出AGV2-2队列状态为7的托盘
+          const status7Pallets = res.data.filter(
+            (item) => item.trayStatus === '7' && item.queueName === 'AGV2-2'
+          );
+          if (status7Pallets.length > 0) {
+            this.deletePalletsWithStatus7(status7Pallets);
+          }
         }
       });
     },
-    // 切换日志面板展开状态
-    toggleLogPanel() {
-      this.isLogExpanded = !this.isLogExpanded;
+    handleStartSelect(item) {
+      this.agvSchedule.startPosition = item.value;
+    },
+    handleEndSelect(item) {
+      this.agvSchedule.endPosition = item.value;
+    },
+    querySearchStartAsync(queryString, cb) {
+      const results = queryString
+        ? this.startAgvPositions.filter(this.createFilter(queryString))
+        : this.startAgvPositions;
+      // el-autocomplete 需要一个 value 字段用于显示
+      cb(results);
+    },
+    querySearchEndAsync(queryString, cb) {
+      const results = queryString
+        ? this.endAgvPositions.filter(this.createFilter(queryString))
+        : this.endAgvPositions;
+      // el-autocomplete 需要一个 value 字段用于显示
+      cb(results);
+    },
+    createFilter(queryString) {
+      return (item) => {
+        return item.value.toLowerCase().indexOf(queryString.toLowerCase()) > 0;
+      };
+    },
+    handleExecutePallet(item) {
+      if (!item.targetPosition) {
+        this.$message.warning('请选择目的地');
+        return;
+      }
+
+      // 发送托盘至选定目的地的逻辑
+      this.$confirm(
+        `确认将托盘 ${item.trayInfo} 发送至 ${item.targetPosition} 吗？`,
+        '提示',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+        .then(() => {
+          // 执行发送逻辑
+          this.sendPalletToDestination(item, item.targetPosition);
+        })
+        .catch(() => {});
+    },
+
+    sendPalletToDestination(item, destination) {
+      // 根据托盘信息给AGV小车发送指令
+      this.addLog(
+        `正在发送托盘 ${item.trayInfo} 至 ${destination}...先途径AGV2-2...`
+      );
+
+      // 显示加载状态
+      this.$set(item, 'showSendPanel', false);
+
+      // 调用发送AGV指令方法，确定任务类型和起点终点
+      const taskType = 'PF-FMR-COMMON-JH2'; // 假设是从缓存区到输送线
+      const fromSiteCode = item.queueName + item.queueNum;
+
+      this.sendAgvCommand(taskType, fromSiteCode, '201')
+        .then((robotTaskCode) => {
+          if (robotTaskCode) {
+            // 更新托盘状态为正在发送中
+            const param = {
+              id: item.id,
+              trayStatus: '3', // -在缓存区等待AGV取货
+              robotTaskCode,
+              targetPosition: destination // 保存目的地信息
+            };
+
+            HttpUtil.post('/queue_info/update', param)
+              .then((res) => {
+                if (res.data == 1) {
+                  this.$message.success(`托盘已发送至 ${destination}`);
+                  this.addLog(`托盘 ${item.trayInfo} 已发送至 ${destination}`);
+                  // 更新本地item的状态
+                  this.$set(item, 'trayStatus', '3');
+                  this.$set(item, 'targetPosition', destination);
+                  // 重新加载当前区域数据
+                  this.loadPalletStorageByArea(this.currentStorageArea);
+                }
+              })
+              .catch((err) => {
+                this.$message.error('托盘状态更新失败，请重试');
+                this.addLog(`托盘状态更新失败：${err}`);
+                // 恢复发送面板状态
+                this.$set(item, 'showSendPanel', true);
+              });
+          } else {
+            this.$message.error('AGV指令发送失败');
+            // 恢复发送面板状态
+            this.$set(item, 'showSendPanel', true);
+          }
+        })
+        .catch((err) => {
+          this.$message.error(`发送指令失败: ${err}`);
+          // 恢复发送面板状态
+          this.$set(item, 'showSendPanel', true);
+        });
+    },
+    simulateAGV1Signal() {
+      this.agvSignalLoading = true;
+      // 设置bit5为1，触发监听器
+      this.agvScheduleCondition.bit5 = '1';
+      this.addLog('模拟一楼提升机出口有货信号已发送');
+
+      // 1秒后恢复为0
+      setTimeout(() => {
+        this.agvScheduleCondition.bit5 = '0';
+        this.agvSignalLoading = false;
+        this.addLog('模拟一楼提升机出口有货信号已恢复');
+      }, 1000);
+    },
+    // --- 托盘移动功能方法 START ---
+    handleOpenMovePalletDialog(item) {
+      this.loadPalletStorageByArea(this.currentStorageArea); // 重新加载数据
+      this.sourcePalletToMove = JSON.parse(JSON.stringify(item)); // 深拷贝
+      this.selectedTargetPalletIdForMove = null; // 重置选择
+      this.movePalletDialogVisible = true;
+    },
+
+    resetMovePalletDialog() {
+      this.movePalletDialogVisible = false;
+      this.sourcePalletToMove = null;
+      this.selectedTargetPalletIdForMove = null;
+    },
+
+    async confirmPalletMove() {
+      if (!this.sourcePalletToMove || !this.selectedTargetPalletIdForMove) {
+        this.$message.warning('未选择源托盘或目标位置。');
+        return;
+      }
+
+      const source = this.sourcePalletToMove;
+      // 确保从最新的 currentStoragePositions 中查找目标，以防 stale data
+      const currentTargetList =
+        this.palletStorageAreas[this.currentStorageArea] || [];
+      const target = currentTargetList.find(
+        (p) => p.id === this.selectedTargetPalletIdForMove
+      );
+
+      if (!target) {
+        this.$message.error('找不到目标位置信息，请刷新后重试。');
+        return;
+      }
+
+      if (source.id === target.id) {
+        this.$message.warning('源位置和目标位置不能相同。');
+        return;
+      }
+      const fieldsToHandle = [
+        'trayInfo',
+        'trayStatus',
+        'robotTaskCode',
+        'trayInfoAdd',
+        'targetPosition'
+      ];
+      const updates = [];
+
+      if (target.trayInfo) {
+        const sourceUpdate = { id: source.id };
+        const targetUpdate = { id: target.id };
+
+        fieldsToHandle.forEach((field) => {
+          sourceUpdate[field] = target[field];
+          targetUpdate[field] = source[field];
+        });
+        updates.push(sourceUpdate, targetUpdate);
+      } else {
+        const targetUpdate = { id: target.id };
+        fieldsToHandle.forEach((field) => {
+          targetUpdate[field] = source[field];
+        });
+
+        const sourceClearUpdate = { id: source.id };
+        fieldsToHandle.forEach((field) => {
+          sourceClearUpdate[field] = ''; // 清空字段，与移除操作保持一致
+        });
+        updates.push(targetUpdate, sourceClearUpdate);
+      }
+
+      try {
+        const res = await HttpUtil.post('/queue_info/updateByList', updates);
+        // 根据实际API返回结果判断成功，这里假设 res.data > 0 表示成功更新记录数
+        if (res.data == 1) {
+          // 假设后端返回的成功标识
+          this.$message.success('托盘移动成功！');
+          this.loadPalletStorageByArea(this.currentStorageArea); // 刷新列表
+          this.resetMovePalletDialog();
+        } else {
+          const errorMsg = res && res.message ? res.message : '未知错误';
+          this.$message.error(`托盘移动失败: ${errorMsg}`);
+        }
+      } catch (error) {
+        const errorMsg = error && error.message ? error.message : '操作异常';
+        this.$message.error(`托盘移动操作异常: ${errorMsg}`);
+      }
+    },
+    // --- 托盘移动功能方法 END ---
+    showAgvTaskManagement() {
+      this.agvTaskDialogVisible = true;
+      this.refreshAgvTasks();
+    },
+
+    refreshAgvTasks() {
+      this.agvTasksLoading = true;
+      HttpUtil.post('/queue_info/queryQueueList', {})
+        .then((res) => {
+          if (res.data && Array.isArray(res.data)) {
+            // 筛选出trayStatus为'0'、'1'、'3'、'4'、'6'、'7'状态的数据
+            const runningTasks = res.data.filter((item) =>
+              ['0', '1', '3', '4', '6', '7'].includes(item.trayStatus)
+            );
+
+            // 根据楼层分类
+            const floor1Tasks = runningTasks.filter(
+              (item) =>
+                item.queueName === 'AGV2-2' &&
+                ['6', '7'].includes(item.trayStatus)
+            );
+            const floor2Tasks = runningTasks.filter((item) =>
+              ['0', '1', '3', '4'].includes(item.trayStatus)
+            );
+            const floor3Tasks = runningTasks.filter(
+              (item) =>
+                item.queueName === 'AGV3-1' ||
+                item.targetPosition?.includes('三楼')
+            );
+
+            // 根据当前选中的楼层显示对应的数据
+            switch (this.currentAgvTaskFloor) {
+              case 'floor1':
+                this.currentAgvTasks = floor1Tasks;
+                break;
+              case 'floor2':
+                this.currentAgvTasks = floor2Tasks;
+                break;
+              case 'floor3':
+                this.currentAgvTasks = [];
+                break;
+              default:
+                this.currentAgvTasks = [];
+            }
+            console.log(this.currentAgvTasks);
+          } else {
+            this.currentAgvTasks = [];
+            this.$message.warning('未获取到任务数据');
+          }
+        })
+        .catch((err) => {
+          console.error('获取AGV任务数据失败:', err);
+          this.$message.error('获取AGV任务数据失败');
+          this.currentAgvTasks = [];
+        })
+        .finally(() => {
+          this.agvTasksLoading = false;
+        });
+    },
+
+    handleAgvTaskTabChange() {
+      this.refreshAgvTasks();
+    },
+
+    cancelAgvTask(task) {
+      this.$confirm(`确认取消托盘"${task.trayInfo}"的任务吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+        .then(async () => {
+          const robotTaskCode = await this.sendCancelAgvCommand(
+            task.robotTaskCode,
+            task.trayInfo
+          );
+          if (robotTaskCode !== '') {
+            // 调用取消AGV任务的API
+            HttpUtil.post('/queue_info/update', {
+              id: task.id,
+              isWaitCancel: '1'
+            })
+              .then((res) => {
+                if (res.data == 1) {
+                  this.$message.success('任务取消请求已发送');
+                  this.addLog(`托盘"${task.trayInfo}"的任务取消请求已发送`);
+                  // 刷新任务列表
+                  this.refreshAgvTasks();
+                } else {
+                  this.$message.error('任务取消请求失败');
+                }
+              })
+              .catch((err) => {
+                console.error('取消AGV任务失败:', err);
+                this.$message.error('取消AGV任务失败');
+              });
+          }
+        })
+        .catch(() => {
+          // 取消操作
+        });
+    },
+
+    getAgvTaskStatusText(status) {
+      // 根据trayStatus状态返回对应的文本描述
+      const statusMap = {
+        0: '在2800等待AGV取货',
+        1: '已在2800取货，正往缓存区运送',
+        2: '已送至2楼缓存区',
+        3: '在缓存区等待AGV取货',
+        4: '已在缓存区取货，正往运往目的地',
+        5: '已送至2楼目的地',
+        6: '等待一楼AGV取货',
+        7: 'AGV已在一楼AGV1-1取货，正运往目的地'
+      };
+
+      return statusMap[status] || '未知状态';
+    },
+    async sendCancelAgvCommand(robotTaskCode, trayInfo) {
+      // 测试用，返回当前时间戳
+      // this.addLog(
+      //   `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
+      // );
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        robotTaskCode: robotTaskCode,
+        cancelType: 'CANCEL'
+      };
+      this.addLog(
+        `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/cancel',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskFinished':
+              errorMsg = '任务已结束';
+              break;
+            case 'Err_TaskNotFound':
+              errorMsg = '任务找不到';
+              break;
+            case 'Err_TaskModifyReject':
+              errorMsg = '任务当前无法变更';
+              break;
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '新任务任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与新任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodesNotMatch':
+              errorMsg = '机器人编号与新任务不匹配，无法调度';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     }
   }
 };
 </script>
 
-<style scoped>
-.floor-image-container {
-  height: 100%;
+<style scoped lang="less">
+.content-wrapper {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 0;
-  position: relative;
-}
-
-.image-wrapper {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.floor-image {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-}
-
-.marker {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-  z-index: 2;
-  pointer-events: auto;
-}
-
-.marker::before {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: rgba(10, 197, 168, 0.8);
-  border-radius: 50%;
-  animation: glow 2s infinite;
-}
-
-.pulse {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: rgba(10, 197, 168, 0.4);
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-
-.marker-label {
-  position: absolute;
-  white-space: nowrap;
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  bottom: 150%;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.marker:hover .marker-label {
-  opacity: 1;
-}
-
-.marker-show-label .marker-label {
-  opacity: 1;
-}
-
-@keyframes glow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(10, 197, 168, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(10, 197, 168, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(10, 197, 168, 0);
-  }
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2.5);
-    opacity: 0;
-  }
-}
-/* 带数据面板的标识点样式 */
-.marker-with-panel {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-  z-index: 2;
-}
-
-.marker-with-panel::before {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: rgba(64, 158, 255, 0.8);
-  border-radius: 50%;
-  animation: glow-blue 2s infinite;
-}
-
-.marker-with-panel .pulse {
-  background: rgba(64, 158, 255, 0.4);
-}
-
-.marker-line {
-  position: absolute;
-  width: 100px;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    rgba(64, 158, 255, 0.8),
-    rgba(64, 158, 255, 0.2)
-  );
-  transform-origin: left center;
-  transition: all 0.3s ease;
-}
-
-.data-panel {
-  position: absolute;
-  background: rgba(30, 42, 56, 0.95);
-  border: 1px solid rgba(64, 158, 255, 0.3);
-  border-radius: 8px;
-  padding: 12px;
-  width: 200px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  transition: all 0.3s ease;
-  pointer-events: none;
-}
-
-/* 面板位置样式 */
-.data-panel.position-right {
-  left: calc(100% + 15px);
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.data-panel.position-left {
-  right: calc(100% + 15px);
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.data-panel.position-top {
-  bottom: calc(100% + 15px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.data-panel.position-bottom {
-  top: calc(100% + 15px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.data-panel.position-top-left {
-  bottom: calc(100% + 15px);
-  right: calc(100% + 15px);
-  transform: none;
-}
-
-.data-panel.position-top-right {
-  bottom: calc(100% + 15px);
-  left: calc(100% + 15px);
-  transform: none;
-}
-
-.data-panel.position-bottom-left {
-  top: calc(100% + 15px);
-  right: calc(100% + 15px);
-  transform: none;
-}
-
-.data-panel.position-bottom-right {
-  top: calc(100% + 15px);
-  left: calc(100% + 15px);
-  transform: none;
-}
-
-/* 始终显示的面板 */
-.data-panel.always-show {
-  opacity: 1;
-  pointer-events: auto; /* 允许面板响应鼠标事件 */
-}
-
-/* 悬停时显示面板 */
-.marker-with-panel:hover .data-panel:not(.always-show) {
-  opacity: 1;
-  pointer-events: auto; /* 悬停时也允许面板响应鼠标事件 */
-}
-
-.data-panel-header {
-  font-size: 14px;
-  color: #409eff;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(64, 158, 255, 0.2);
-}
-
-.data-panel-content {
-  font-size: 12px;
-}
-
-.data-panel-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.data-panel-label {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-}
-
-/* 竖向布局样式 */
-.data-panel.vertical-layout {
-  width: 110px;
-  padding: 8px;
-}
-
-.data-panel.vertical-layout .data-panel-row {
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.data-panel.vertical-layout .data-panel-label {
-  margin-bottom: 2px;
-}
-
-/* 带按钮的点位样式 */
-.marker-with-button {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-  z-index: 2;
-}
-
-.marker-with-button::before {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 156, 0, 0.8);
-  border-radius: 50%;
-  animation: glow 2s infinite;
-}
-
-.marker-with-button .pulse {
-  background: rgba(255, 156, 0, 0.4);
-}
-
-.marker-with-button .marker-button {
-  position: absolute;
-  left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%);
-  background: linear-gradient(
-    145deg,
-    rgba(255, 156, 0, 0.9),
-    rgba(255, 126, 0, 0.9)
-  );
-  border: 1px solid rgba(255, 176, 20, 0.3);
-  border-radius: 6px;
-  color: white;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(255, 156, 0, 0.2);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.marker-with-button .marker-button:hover {
-  background: linear-gradient(
-    145deg,
-    rgba(255, 166, 10, 1),
-    rgba(255, 136, 10, 1)
-  );
-  transform: translateY(-50%) scale(1.05);
-  box-shadow: 0 4px 12px rgba(255, 156, 0, 0.3);
-}
-
-.marker-with-button .marker-button:active {
-  transform: translateY(-50%) scale(0.98);
-  box-shadow: 0 2px 4px rgba(255, 156, 0, 0.2);
-}
-
-/* 抽屉内容样式 */
-.storage-container {
-  padding: 20px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-/* 自定义滚动条样式 */
-.storage-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.storage-container::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 3px;
-}
-
-.storage-container::-webkit-scrollbar-thumb {
-  background: rgba(64, 158, 255, 0.3);
-  border-radius: 3px;
-  transition: all 0.3s ease;
-}
-
-.storage-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(64, 158, 255, 0.5);
-}
-
-.storage-card {
-  background: rgba(30, 42, 56, 0.95);
-  border: 1px solid rgba(64, 158, 255, 0.3);
-  border-radius: 8px;
-  margin-bottom: 16px;
   overflow: hidden;
-  transition: all 0.3s ease;
-}
+  width: 100%;
+  height: 100%;
+  .side-info-panel {
+    width: 330px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 0px 7px 7px 7px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    overflow: hidden;
+    .schedule-section {
+      background: #07293e;
+      padding: 10px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+      height: 338px;
+      display: flex;
+      flex-direction: column;
 
-.storage-card.can-move {
-  cursor: pointer;
-}
+      :deep(.el-input-number) {
+        width: 100px;
+      }
 
-.storage-card.can-move:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
-}
+      :deep(.el-input-number .el-input__inner) {
+        background: rgba(10, 197, 168, 0.1);
+        border: 1px solid rgba(10, 197, 168, 0.3);
+        color: #fff;
+      }
 
-.storage-card-header {
-  background: rgba(64, 158, 255, 0.1);
-  padding: 12px 16px;
-  font-size: 16px;
-  font-weight: 500;
-  color: #409eff;
-  border-bottom: 1px solid rgba(64, 158, 255, 0.2);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+      :deep(.el-progress-bar__outer) {
+        background-color: rgba(255, 255, 255, 0.2) !important;
+      }
 
-.card-actions {
-  display: flex;
-  gap: 8px;
-}
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0px 0px 8px 0px;
+        color: #0ac5a8;
+        font-size: 22px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .schedule-content {
+        flex: 1;
+        padding: 5px 0 5px 0;
+        .schedule-item {
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 4px;
+          padding: 8px;
+          margin-bottom: 6px;
+          width: 100%;
+          box-sizing: border-box;
+          .schedule-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+          }
+          .schedule-progress {
+            margin-top: 6px;
+            .progress-container {
+              display: flex;
+              align-items: center;
+            }
+            .progress-info {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-right: 10px;
+              color: rgba(255, 255, 255, 0.6);
+              font-size: 12px;
+              min-width: 105px;
+            }
+            :deep(.el-progress) {
+              flex: 1;
+            }
+            :deep(.el-progress__text) {
+              color: rgba(255, 255, 255, 0.6);
+              font-size: 12px !important;
+            }
+          }
+        }
+      }
+      .schedule-content::-webkit-scrollbar {
+        width: 4px;
+      }
 
-:deep(.el-button--text) {
-  color: #409eff;
-  padding: 0;
-}
+      .schedule-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
 
-:deep(.el-button--text:hover) {
-  color: #66b1ff;
-}
+      .schedule-content::-webkit-scrollbar-thumb {
+        background: rgba(10, 197, 168, 0.2);
+        border-radius: 2px;
+      }
 
-:deep(.el-button--text.danger-button) {
-  color: #f56c6c;
-}
+      .schedule-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(10, 197, 168, 0.4);
+      }
+    }
 
-:deep(.el-button--text.danger-button:hover) {
-  color: #f78989;
-}
+    /* AGV调度区域 */
+    .agv-schedule-section {
+      background: #07293e;
+      padding: 10px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
 
-.storage-card-content {
-  padding: 16px;
-}
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0px 0px 8px 0px;
+        color: #0ac5a8;
+        font-size: 22px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
 
-.storage-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #fff;
-}
+      .agv-schedule-content {
+        padding: 8px 0 0 0;
 
-.storage-info.empty {
-  color: rgba(255, 255, 255, 0.5);
-  font-style: italic;
-}
+        .agv-route-selector {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 8px;
 
-.storage-info .label {
-  color: rgba(255, 255, 255, 0.7);
-}
+          .route-row {
+            display: flex;
+            gap: 10px;
+          }
 
-.storage-info .value {
-  font-weight: 500;
-}
+          .route-item {
+            display: flex;
+            align-items: center;
+            flex: 1;
 
-/* 自定义抽屉样式 */
-:deep(.storage-drawer) {
-  background: rgba(24, 29, 47, 0.95) !important;
-  backdrop-filter: blur(12px);
-}
+            .route-label {
+              color: rgba(255, 255, 255, 0.8);
+              width: 50px;
+            }
+            .agv-input {
+              flex: 1;
+            }
+          }
+        }
 
-:deep(.storage-drawer .el-drawer__header) {
-  margin-bottom: 0;
-  padding: 16px 20px;
-  color: #fff;
-  font-size: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
+        .agv-controls {
+          width: 100%;
+          display: flex;
 
-:deep(.storage-drawer .el-drawer__close-btn) {
-  color: #fff;
+          .agv-btn {
+            flex: 1;
+            justify-content: center;
+          }
+        }
+      }
+    }
+
+    /* 日志区域 */
+    .log-section {
+      background: #07293e;
+      padding: 10px;
+      border-radius: 15px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+      height: 257px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0px 0px 8px 0px;
+        color: #0ac5a8;
+        font-size: 22px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        .log-tabs {
+          display: flex;
+          gap: 5px;
+        }
+        .log-tab {
+          position: relative;
+          font-size: 14px;
+          color: rgba(255, 255, 255, 0.6);
+          cursor: pointer;
+          padding: 5px 15px;
+          border-radius: 4px;
+          transition: all 0.3s ease;
+          .alarm-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #f56c6c;
+            color: #fff;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+        }
+        .log-tab.active {
+          color: #fff;
+          background: rgba(10, 197, 168, 0.2);
+        }
+        .log-tab:hover:not(.active) {
+          color: #0ac5a8;
+        }
+      }
+      .scrollable-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 0;
+        .log-list {
+          padding: 0 10px;
+          width: 100%;
+          box-sizing: border-box;
+          .log-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            width: 100%;
+            box-sizing: border-box;
+            .log-time {
+              font-size: 12px;
+              color: rgba(255, 255, 255, 0.4);
+              margin-bottom: 6px;
+            }
+            .log-item-content {
+              color: rgba(255, 255, 255, 0.9);
+              font-size: 13px;
+              line-height: 1.6;
+              overflow-wrap: break-word;
+              word-wrap: break-word;
+              word-break: normal;
+              hyphens: auto;
+              display: block;
+              width: 100%;
+              padding-right: 10px;
+            }
+          }
+          .log-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+          }
+
+          .log-item.alarm {
+            background: rgba(245, 108, 108, 0.05);
+          }
+
+          .log-item.alarm.unread {
+            background: rgba(245, 108, 108, 0.1);
+            border-left: 2px solid #f56c6c;
+          }
+          /* 添加空状态样式 */
+          .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 0;
+            color: rgba(255, 255, 255, 0.6);
+            i {
+              font-size: 48px;
+              margin-bottom: 16px;
+              color: rgba(255, 255, 255, 0.3);
+            }
+            p {
+              font-size: 14px;
+              margin: 0 0 16px 0;
+            }
+            .el-button {
+              color: #0ac5a8;
+              font-size: 14px;
+              i {
+                font-size: 14px;
+                margin-right: 4px;
+                color: inherit;
+              }
+            }
+            .el-button:hover {
+              color: #0db196;
+            }
+          }
+        }
+      }
+      .scrollable-content::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .scrollable-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .scrollable-content::-webkit-scrollbar-thumb {
+        background: rgba(10, 197, 168, 0.2);
+        border-radius: 2px;
+      }
+
+      .scrollable-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(10, 197, 168, 0.4);
+      }
+    }
+  }
+  .main-content {
+    flex: 1;
+    display: flex;
+    padding: 0px 7px 7px 0px;
+    box-sizing: border-box;
+    overflow: hidden;
+    height: 100%;
+    .floor-container {
+      display: flex;
+      gap: 10px;
+      height: 100%;
+      width: 100%;
+      min-height: 0;
+
+      .floor-left {
+        flex: 1;
+        background: #07293e;
+        padding: 10px;
+        border-radius: 15px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+        color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+        box-sizing: border-box;
+        .floor-title {
+          font-size: 22px;
+          color: #0ac5a8;
+          font-weight: 900;
+          padding-bottom: 10px;
+          flex-shrink: 0;
+        }
+        .floor-image-container {
+          flex: 1;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          min-height: 0;
+          height: calc(100% - 50px);
+          position: relative;
+          .image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            .floor-image {
+              display: block;
+              max-width: 100%;
+              max-height: 100%;
+              width: auto;
+              height: auto;
+              object-fit: contain;
+            }
+
+            .marker-with-panel::before {
+              content: '';
+              position: absolute;
+              width: 10px;
+              height: 10px;
+              background: rgba(64, 158, 255, 0.8);
+              border-radius: 50%;
+              animation: glow-blue 2s infinite;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+            }
+
+            @keyframes glow-blue {
+              0% {
+                box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.4);
+              }
+              70% {
+                box-shadow: 0 0 0 8px rgba(64, 158, 255, 0);
+              }
+              100% {
+                box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
+              }
+            }
+            .marker-with-panel,
+            .marker-with-panel-machine {
+              position: absolute;
+              transform: translate(-50%, -50%);
+              z-index: 2;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              /* 添加机械臂标签样式 */
+              .arm-label {
+                color: #ff5722;
+                font-weight: bold;
+                font-size: 16px;
+                line-height: 1;
+                padding: 2px 4px;
+                border-radius: 3px;
+                cursor: pointer;
+              }
+              .marker-line {
+                position: absolute;
+                width: 100px;
+                height: 2px;
+                background: linear-gradient(
+                  90deg,
+                  rgba(64, 158, 255, 0.8),
+                  rgba(64, 158, 255, 0.2)
+                );
+                transform-origin: left center;
+                transition: all 0.3s ease;
+              }
+              .data-panel {
+                position: absolute;
+                background: rgba(30, 42, 56, 0.95);
+                border: 1px solid rgba(64, 158, 255, 0.3);
+                border-radius: 8px;
+                padding: 12px;
+                width: 160px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                opacity: 0;
+                transition: all 0.3s ease;
+                pointer-events: none;
+                z-index: 10;
+              }
+              /* 显示面板 */
+              .data-panel.show-panel {
+                opacity: 1;
+                pointer-events: auto;
+              }
+              /* 面板位置样式 */
+              .data-panel.position-right {
+                left: calc(100% + 10px);
+                top: 50%;
+                transform: translateY(-50%);
+              }
+
+              .data-panel.position-left {
+                right: calc(100% + 10px);
+                top: 50%;
+                transform: translateY(-50%);
+              }
+
+              .data-panel.position-top {
+                bottom: calc(100% + 10px);
+                left: 50%;
+                transform: translateX(-50%);
+              }
+
+              .data-panel.position-bottom {
+                top: calc(100% + 10px);
+                left: 50%;
+                transform: translateX(-50%);
+              }
+
+              .data-panel.position-top-left {
+                bottom: calc(100% + 10px);
+                right: calc(100% + 10px);
+                transform: none;
+              }
+
+              .data-panel.position-top-right {
+                bottom: calc(100% + 10px);
+                left: calc(100% + 10px);
+                transform: none;
+              }
+
+              .data-panel.position-bottom-left {
+                top: calc(100% + 10px);
+                right: calc(100% + 10px);
+                transform: none;
+              }
+
+              .data-panel.position-bottom-right {
+                top: calc(100% + 10px);
+                left: calc(100% + 10px);
+                transform: none;
+              }
+
+              /* 始终显示的面板 */
+              .data-panel.always-show {
+                opacity: 1;
+                pointer-events: auto;
+              }
+              .data-panel-header {
+                font-size: 14px;
+                color: #409eff;
+                margin-bottom: 8px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+              }
+              .data-panel-content {
+                font-size: 12px;
+                .data-panel-row {
+                  display: flex;
+                  justify-content: space-between;
+                  margin-bottom: 6px;
+                  color: rgba(255, 255, 255, 0.9);
+                }
+
+                .data-panel-label {
+                  color: rgba(255, 255, 255, 0.6);
+                  font-size: 12px;
+                }
+              }
+              .data-panel-mechanical-arm {
+                background: linear-gradient(
+                  145deg,
+                  rgba(16, 42, 66, 0.95),
+                  rgba(8, 72, 107, 0.95)
+                );
+                border: 1px solid rgba(0, 231, 255, 0.2);
+                box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
+                  inset 0 0 0 1px rgba(0, 231, 255, 0.05);
+                backdrop-filter: blur(12px);
+                width: 140px;
+                .data-panel-header {
+                  color: #00e7ff;
+                  border-bottom: 1px solid rgba(0, 231, 255, 0.2);
+                  font-weight: 500;
+                  text-transform: uppercase;
+                  letter-spacing: 1px;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  pointer-events: auto;
+                  span {
+                    margin-right: 8px;
+                  }
+                }
+                .data-panel-row {
+                  color: #e2e8f0;
+                  .status-idle {
+                    color: #409eff;
+                  }
+
+                  .status-processing {
+                    color: #e6a23c;
+                  }
+
+                  .status-completed {
+                    color: #67c23a;
+                  }
+                }
+                .data-panel-label {
+                  color: rgba(0, 231, 255, 0.7);
+                }
+              }
+            }
+
+            /* 带按钮的点位样式 */
+            .marker-with-button {
+              position: absolute;
+              width: 10px;
+              height: 10px;
+              transform: translate(-50%, -50%);
+              cursor: pointer;
+              z-index: 2;
+              .pulse {
+                background: rgba(255, 156, 0, 0.4);
+              }
+              .marker-button {
+                position: absolute;
+                left: calc(100% + 12px);
+                top: 50%;
+                transform: translateY(-50%);
+                background: linear-gradient(
+                  145deg,
+                  rgba(255, 156, 0, 0.9),
+                  rgba(255, 126, 0, 0.9)
+                );
+                border: 1px solid rgba(255, 176, 20, 0.3);
+                border-radius: 6px;
+                color: white;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                white-space: nowrap;
+                box-shadow: 0 2px 6px rgba(255, 156, 0, 0.2);
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+              }
+              .marker-button:hover {
+                background: linear-gradient(
+                  145deg,
+                  rgba(255, 166, 10, 1),
+                  rgba(255, 136, 10, 1)
+                );
+                transform: translateY(-50%) scale(1.05);
+                box-shadow: 0 4px 12px rgba(255, 156, 0, 0.3);
+              }
+              .marker-button:active {
+                transform: translateY(-50%) scale(0.98);
+                box-shadow: 0 2px 4px rgba(255, 156, 0, 0.2);
+              }
+            }
+
+            .marker-with-button::before {
+              content: '';
+              position: absolute;
+              width: 100%;
+              height: 100%;
+              background: rgba(255, 156, 0, 0.8);
+              border-radius: 50%;
+              animation: glow 2s infinite;
+            }
+            @keyframes glow {
+              0% {
+                box-shadow: 0 0 0 0 rgba(255, 156, 0, 0.4);
+              }
+              70% {
+                box-shadow: 0 0 0 8px rgba(255, 156, 0, 0);
+              }
+              100% {
+                box-shadow: 0 0 0 0 rgba(255, 156, 0, 0);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  /* 抽屉内容样式 */
+  .storage-container {
+    padding: 20px;
+    height: 100%;
+    overflow-y: auto;
+
+    .storage-card {
+      background: rgba(30, 42, 56, 0.95);
+      border: 1px solid rgba(64, 158, 255, 0.3);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      .storage-card-header {
+        background: rgba(64, 158, 255, 0.1);
+        padding: 12px 16px;
+        font-size: 16px;
+        font-weight: 800;
+        color: #409eff;
+        border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        .card-actions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+
+          :deep(.el-button--text) {
+            color: #409eff;
+            padding: 0;
+          }
+
+          :deep(.el-button--text:hover) {
+            color: #66b1ff;
+          }
+
+          :deep(.el-button--text.danger-button) {
+            color: #f56c6c;
+          }
+
+          :deep(.el-button--text.danger-button:hover) {
+            color: #f78989;
+          }
+        }
+      }
+      .storage-card-content {
+        padding: 16px;
+
+        .storage-info-container {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          width: 100%;
+          .storage-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            color: #fff;
+            min-width: 150px;
+
+            .storage-info-row {
+              display: flex;
+              gap: 8px;
+              align-items: flex-start;
+
+              &.product-desc {
+                .value {
+                  flex: 1;
+                  word-break: break-word;
+                  line-height: 1.4;
+                }
+              }
+            }
+
+            .label {
+              color: rgba(255, 255, 255, 0.7);
+              white-space: nowrap;
+            }
+
+            .value {
+              font-weight: 500;
+            }
+          }
+
+          .send-action-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+
+            .el-button {
+              width: 36px;
+              height: 36px;
+              padding: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: rgba(64, 158, 255, 0.1);
+              border-radius: 50%;
+              transition: all 0.3s;
+
+              &:hover {
+                background: rgba(64, 158, 255, 0.2);
+                transform: scale(1.1);
+              }
+            }
+          }
+
+          .sending-status {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+
+            .status-text {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              color: #e6a23c;
+              font-weight: 500;
+
+              i {
+                font-size: 16px;
+              }
+            }
+
+            .destination {
+              display: flex;
+              gap: 4px;
+              font-size: 12px;
+
+              .label {
+                color: rgba(255, 255, 255, 0.6);
+              }
+
+              .value {
+                color: #fff;
+              }
+            }
+          }
+        }
+        .storage-info.empty {
+          color: rgba(255, 255, 255, 0.5);
+          font-style: italic;
+        }
+
+        .send-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+
+          .target-input {
+            width: 90px;
+          }
+
+          .action-buttons {
+            display: flex;
+            gap: 6px;
+            width: 90px;
+            justify-content: space-between;
+
+            :deep(.el-button) {
+              padding: 5px 4px;
+              flex: 1;
+            }
+          }
+        }
+      }
+    }
+  }
+  /* 自定义滚动条样式 */
+  .storage-container::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .storage-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+  }
+
+  .storage-container::-webkit-scrollbar-thumb {
+    background: rgba(64, 158, 255, 0.3);
+    border-radius: 3px;
+    transition: all 0.3s ease;
+  }
+
+  .storage-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(64, 158, 255, 0.5);
+  }
+  /* 自定义抽屉样式 */
+  :deep(.storage-drawer) {
+    background: rgba(24, 29, 47, 0.95) !important;
+    backdrop-filter: blur(12px);
+  }
+
+  :deep(.storage-drawer .el-drawer__header) {
+    margin-bottom: 0;
+    padding: 16px 20px;
+    /* color: #fff; */ /* 由内部 span 控制颜色 */
+    /* font-size: 18px; */ /* 由内部 span 控制字体大小 */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    /* Element UI 默认 header 是 flex, align-items: center */
+  }
+
+  .drawer-title-container {
+    display: flex;
+    align-items: center;
+    width: 100%; /* 占据整个头部宽度 */
+    color: #fff; /* 保持原有标题颜色 */
+    font-size: 18px; /* 保持原有标题字体大小 */
+  }
+
+  .title-refresh-button {
+    /* 根据需要调整按钮与标题的间距 */
+    margin-left: 10px;
+  }
+
+  :deep(.storage-drawer .el-drawer__close-btn) {
+    color: #fff;
+  }
 }
 
 .test-button-container {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
+  top: 123px;
+  left: 8px;
   z-index: 1000;
   opacity: 0.6;
   transition: opacity 0.3s;
@@ -1077,116 +2948,211 @@ export default {
   margin-bottom: 0;
 }
 
-/* 添加新的悬浮日志面板样式 */
-.floating-log-container {
-  position: fixed;
-  bottom: 2px;
-  right: 2px;
-  width: 360px;
-  background: rgba(30, 42, 56, 0.95);
-  border: 1px solid rgba(64, 158, 255, 0.3);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-  transition: all 0.3s ease;
+/* 托盘移动对话框样式 */
+.move-pallet-dialog {
+  .target-pallet-list {
+    max-height: 350px; /* 增加列表最大高度 */
+    overflow-y: auto;
+    padding-right: 5px; /* For scrollbar, if thin */
+    margin-top: 0px; /* 调整与上方文字间距 */
+  }
+
+  .target-pallet-item {
+    margin-bottom: 8px;
+    /* padding: 2px; */ /* 移除或调整内边距，el-radio[border]自带一些 */
+    border-radius: 4px;
+    transition: background-color 0.2s;
+
+    .el-radio.is-bordered {
+      width: 100%;
+      padding: 8px 15px; /* 调整el-radio的内边距 */
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background-color: rgba(255, 255, 255, 0.03); /* 略微调暗背景 */
+      &:hover {
+        border-color: #409eff;
+        background-color: rgba(64, 158, 255, 0.05);
+      }
+    }
+    .el-radio.is-bordered.is-checked {
+      border-color: #409eff;
+      background-color: rgba(64, 158, 255, 0.1);
+    }
+    .el-radio__label {
+      color: #e0e0e0; /* 标签文字颜色稍亮 */
+      font-size: 13px; /* 调整字体大小 */
+    }
+    .el-radio__input.is-disabled .el-radio__inner {
+      /* 禁用项样式 */
+      background-color: rgba(128, 128, 128, 0.2);
+      border-color: rgba(128, 128, 128, 0.3);
+    }
+    &.is-source .el-radio.is-bordered {
+      /* 源托盘的特殊样式 */
+      background-color: rgba(100, 100, 100, 0.2); /* 暗化背景表示禁用 */
+      border-color: rgba(100, 100, 100, 0.4);
+      cursor: not-allowed;
+    }
+    &.is-source .el-radio__label {
+      color: #888; /* 暗化文字 */
+    }
+  }
+  /* 滚动条样式 */
+  .target-pallet-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .target-pallet-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+  }
+  .target-pallet-list::-webkit-scrollbar-thumb {
+    background: rgba(64, 158, 255, 0.3);
+    border-radius: 3px;
+  }
+  .target-pallet-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(64, 158, 255, 0.5);
+  }
 }
 
-.floating-log-container .log-header {
-  padding: 8px 16px;
-  background: rgba(64, 158, 255, 0.1);
-  border-bottom: 1px solid rgba(64, 158, 255, 0.2);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
-  border-radius: 8px 8px 0 0;
+.agv-task-dialog {
+  background: rgba(24, 29, 47, 0.95) !important;
+  backdrop-filter: blur(12px);
+
+  :deep(.el-dialog__header) {
+    padding: 12px 20px;
+    background: rgba(64, 158, 255, 0.1);
+    border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+  }
+
+  :deep(.el-dialog__title) {
+    color: #409eff;
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 20px;
+    color: #fff;
+  }
+
+  :deep(.el-tabs__item) {
+    color: rgba(255, 255, 255, 0.6);
+    padding: 0 16px;
+    height: 36px;
+    line-height: 36px;
+    &.is-active {
+      color: #409eff;
+    }
+    &:hover {
+      color: #66b1ff;
+    }
+  }
+
+  :deep(.el-tabs__active-bar) {
+    background-color: #409eff;
+  }
+
+  :deep(.el-tabs__nav-wrap::after) {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  :deep(.el-table) {
+    background-color: transparent !important;
+  }
+
+  :deep(.el-table__header-wrapper th) {
+    background-color: rgba(64, 158, 255, 0.2) !important;
+    color: #fff !important;
+  }
+
+  :deep(.el-table__row) {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+  }
+
+  :deep(.el-table__body td) {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    color: #333 !important;
+  }
+
+  :deep(.cell) {
+    color: #333 !important;
+  }
+
+  :deep(.el-button--danger) {
+    color: #fff;
+  }
 }
 
-.floating-log-container .log-title {
-  color: #409eff;
-  font-size: 14px;
-  font-weight: 500;
+.agv-task-management {
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    .el-tabs {
+      flex: 1;
+    }
+
+    .el-button {
+      margin-left: 16px;
+    }
+  }
+
+  .task-table {
+    :deep(.el-table) {
+      background-color: transparent;
+
+      :deep(.el-table__header-wrapper) {
+        th {
+          background-color: rgba(64, 158, 255, 0.2);
+          border-color: rgba(255, 255, 255, 0.2);
+          color: #fff;
+          padding: 8px 0;
+        }
+      }
+
+      :deep(.el-table__body-wrapper) {
+        background-color: transparent;
+
+        tr {
+          background-color: rgba(30, 42, 56, 0.95);
+          &:hover > td {
+            background-color: rgba(64, 158, 255, 0.1) !important;
+          }
+        }
+
+        td {
+          border-bottom-color: rgba(255, 255, 255, 0.1);
+          color: #e0e0e0;
+          padding: 8px 0;
+        }
+      }
+
+      :deep(.el-table--border),
+      :deep(.el-table--border::after),
+      :deep(.el-table--border::before) {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      :deep(.el-table--border th),
+      :deep(.el-table--border td) {
+        border-right: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      :deep(.el-table__empty-block) {
+        background-color: rgba(30, 42, 56, 0.95);
+
+        .el-table__empty-text {
+          color: rgba(255, 255, 255, 0.6);
+        }
+      }
+    }
+  }
 }
 
-.floating-log-container .log-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.floating-log-container .log-content {
-  height: 240px;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.floating-log-container .log-item {
-  padding: 4px 8px;
-  margin-bottom: 4px;
-  border-radius: 4px;
-  font-size: 12px;
-  display: flex;
-  gap: 8px;
-  color: #fff;
-}
-
-.floating-log-container .log-time {
-  color: rgba(255, 255, 255, 0.5);
-  white-space: nowrap;
-}
-
-.floating-log-container .log-message {
-  flex: 1;
-  word-break: break-all;
-}
-
-.floating-log-container .log-item.info {
-  background: rgba(64, 158, 255, 0.1);
-}
-
-.floating-log-container .log-item.success {
-  background: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
-}
-
-.floating-log-container .log-item.error {
-  background: rgba(245, 108, 108, 0.1);
+.waiting-cancel-text {
   color: #f56c6c;
-}
-
-/* 自定义日志滚动条样式 */
-.floating-log-container .log-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.floating-log-container .log-content::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 3px;
-}
-
-.floating-log-container .log-content::-webkit-scrollbar-thumb {
-  background: rgba(64, 158, 255, 0.3);
-  border-radius: 3px;
-  transition: all 0.3s ease;
-}
-
-.floating-log-container .log-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(64, 158, 255, 0.5);
-}
-
-/* 添加空日志样式 */
-.floating-log-container .empty-log {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 14px;
-  gap: 8px;
-}
-
-.floating-log-container .empty-log i {
-  font-size: 24px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>
