@@ -634,7 +634,13 @@ import HttpUtilAGV from '@/utils/HttpUtilAGV';
 import moment from 'moment';
 import { ipcRenderer } from 'electron';
 export default {
-  name: 'FloorFirst',
+  name: 'FloorTwo',
+  props: {
+    isActive: {
+      type: Boolean,
+      default: false
+    }
+  },
   data() {
     return {
       currentStorageTitle: '', // 新增：用于抽屉标题
@@ -786,7 +792,6 @@ export default {
   },
   mounted() {
     this.initializeMarkers();
-    this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
     // ipcRenderer.on('receivedMsg', (event, values, values2) => {
     //   // 使用位运算优化赋值
     //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
@@ -850,6 +855,13 @@ export default {
     // });
   },
   watch: {
+    isActive(newVal) {
+      if (newVal) {
+        this.$nextTick(() => {
+          this.updateMarkerPositions();
+        });
+      }
+    },
     // 监听agvScheduleCondition.bit0,
     'agvScheduleCondition.bit0': {
       async handler(newVal) {
@@ -950,15 +962,43 @@ export default {
     },
     initializeMarkers() {
       this.$nextTick(() => {
+        // 确保只选择当前组件内的元素
         this.updateMarkerPositions();
-        window.addEventListener('resize', this.updateMarkerPositions);
+        window.addEventListener('resize', this.updateMarkerPositionsScoped);
       });
     },
+    updateMarkerPositionsScoped() {
+      // 确保只选择当前组件内的元素
+      this.updateMarkerPositions();
+    },
     updateMarkerPositions() {
-      const images = document.querySelectorAll('.floor-image');
+      const images = this.$el.querySelectorAll('.floor-image'); // 限定在当前组件内查找
       images.forEach((image) => {
         const imageWrapper = image.parentElement;
         if (!imageWrapper) return;
+
+        // 如果图片尚未加载完成或组件不可见，其渲染尺寸可能为0
+        if (image.width === 0 || image.height === 0) {
+          // 可以选择在此处等待图片加载完成，或者依赖isActive的watch来触发更新
+          // console.warn("Image not ready or component not visible for marker positioning", image);
+          // 如果在isActive变为true后首次调用，可以尝试强制等待图片加载
+          if (this.isActive && !image.complete) {
+            image.onload = () => {
+              this.$nextTick(() => {
+                // 确保DOM更新后再执行
+                this.updateMarkerPositions();
+              });
+            };
+            return;
+          }
+          if (this.isActive && (image.width === 0 || image.height === 0)) {
+            // console.warn('FloorTwo: Image has 0 width/height even when active. Retrying updateMarkerPositions.');
+            // 这种情况可能需要更复杂的处理，例如设置一个短暂的延迟重试，或者确保图片源正确
+            // 为了简单起见，这里暂时只打印警告，依赖后续可能的resize事件或isActive变化
+            return;
+          }
+          if (!this.isActive) return; // 如果组件不是激活状态，不进行定位
+        }
 
         const markers = imageWrapper.querySelectorAll(
           '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button'
@@ -968,6 +1008,14 @@ export default {
         // 计算图片的实际显示区域
         const displayedWidth = image.width;
         const displayedHeight = image.height;
+        // 检查 naturalWidth 和 naturalHeight 是否为0，避免除以0的错误
+        if (image.naturalWidth === 0 || image.naturalHeight === 0) {
+          console.warn(
+            'Image naturalWidth or naturalHeight is 0. Skipping marker updates for this image.',
+            image
+          );
+          return;
+        }
         const scaleX = displayedWidth / image.naturalWidth;
         const scaleY = displayedHeight / image.naturalHeight;
 
@@ -986,7 +1034,7 @@ export default {
       });
     },
     beforeDestroy() {
-      window.removeEventListener('resize', this.updateMarkerPositions);
+      window.removeEventListener('resize', this.updateMarkerPositionsScoped);
       this.stopPalletMovePolling(); // 组件销毁前停止轮询
     },
     handlePalletStorageClick(area, title) {
@@ -1546,45 +1594,6 @@ export default {
         this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
         return '';
       }
-    },
-    startPalletMovePolling() {
-      if (this.pollingTimerCtoAGV22) {
-        clearInterval(this.pollingTimerCtoAGV22);
-      }
-      // 每3秒轮询一次，并立即执行一次
-      this.pollForPalletsToMove();
-      this.pollingTimerCtoAGV22 = setInterval(this.pollForPalletsToMove, 5000);
-      this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已启动。');
-    },
-
-    stopPalletMovePolling() {
-      if (this.pollingTimerCtoAGV22) {
-        clearInterval(this.pollingTimerCtoAGV22);
-        this.pollingTimerCtoAGV22 = null;
-        this.addLog('[轮询] C区到AGV2-2队列的托盘移动轮询已停止。');
-      }
-    },
-    // 轮询C区有没有能够移到AGV2-2队列的托盘
-    pollForPalletsToMove() {
-      HttpUtil.post('/queue_info/queryQueueList', {}).then((res) => {
-        if (res && res.data.length > 0) {
-          // 过滤出C队列状态为5的托盘
-          const status5Pallets = res.data.filter(
-            (item) => item.trayStatus === '5' && item.queueName === 'C'
-          );
-          if (status5Pallets.length > 0) {
-            this.insertPalletToAGV22(status5Pallets);
-          }
-
-          // 过滤出AGV2-2队列状态为7的托盘
-          const status7Pallets = res.data.filter(
-            (item) => item.trayStatus === '7' && item.queueName === 'AGV2-2'
-          );
-          if (status7Pallets.length > 0) {
-            this.deletePalletsWithStatus7(status7Pallets);
-          }
-        }
-      });
     },
     handleStartSelect(item) {
       this.agvSchedule.startPosition = item.value;

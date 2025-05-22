@@ -24,8 +24,8 @@
     </div>
     <!-- 左侧区域 -->
     <div class="floor-left">
-      <FloorFirst v-show="currentFloor === 1" />
-      <FloorTwo v-show="currentFloor === 2" />
+      <FloorFirst v-show="currentFloor === 1" :is-active="currentFloor === 1" />
+      <FloorTwo v-show="currentFloor === 2" :is-active="currentFloor === 2" />
     </div>
   </div>
 </template>

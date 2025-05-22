@@ -823,6 +823,12 @@ import moment from 'moment';
 import { ipcRenderer } from 'electron';
 export default {
   name: 'FloorFirst',
+  props: {
+    isActive: {
+      type: Boolean,
+      default: false
+    }
+  },
   data() {
     return {
       pollingTimerCtoAGV22: null, // 定时器ID，用于C区到AGV2-2的托盘移动轮询
@@ -1124,6 +1130,13 @@ export default {
     // });
   },
   watch: {
+    isActive(newVal) {
+      if (newVal) {
+        this.$nextTick(() => {
+          this.updateMarkerPositions();
+        });
+      }
+    },
     // 监听agvScheduleCondition.bit0,
     'agvScheduleCondition.bit0': {
       async handler(newVal) {
@@ -1224,15 +1237,40 @@ export default {
     },
     initializeMarkers() {
       this.$nextTick(() => {
+        // 确保只选择当前组件内的元素
         this.updateMarkerPositions();
-        window.addEventListener('resize', this.updateMarkerPositions);
+        window.addEventListener('resize', this.updateMarkerPositionsScoped);
       });
     },
+    updateMarkerPositionsScoped() {
+      // 确保只选择当前组件内的元素
+      this.updateMarkerPositions();
+    },
     updateMarkerPositions() {
-      const images = document.querySelectorAll('.floor-image');
+      const images = this.$el.querySelectorAll('.floor-image'); // 限定在当前组件内查找
       images.forEach((image) => {
         const imageWrapper = image.parentElement;
         if (!imageWrapper) return;
+
+        // 如果图片尚未加载完成或组件不可见，其渲染尺寸可能为0
+        if (image.width === 0 || image.height === 0) {
+          // 可以选择在此处等待图片加载完成，或者依赖isActive的watch来触发更新
+          // console.warn("Image not ready or component not visible for marker positioning", image);
+          if (this.isActive && !image.complete) {
+            image.onload = () => {
+              this.$nextTick(() => {
+                // 确保DOM更新后再执行
+                this.updateMarkerPositions();
+              });
+            };
+            return;
+          }
+          if (this.isActive && (image.width === 0 || image.height === 0)) {
+            // console.warn('FloorFirst: Image has 0 width/height even when active. Retrying updateMarkerPositions.');
+            return;
+          }
+          if (!this.isActive) return; // 如果组件不是激活状态，不进行定位
+        }
 
         const markers = imageWrapper.querySelectorAll(
           '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button'
@@ -1242,6 +1280,14 @@ export default {
         // 计算图片的实际显示区域
         const displayedWidth = image.width;
         const displayedHeight = image.height;
+        // 检查 naturalWidth 和 naturalHeight 是否为0，避免除以0的错误
+        if (image.naturalWidth === 0 || image.naturalHeight === 0) {
+          console.warn(
+            'Image naturalWidth or naturalHeight is 0. Skipping marker updates for this image.',
+            image
+          );
+          return;
+        }
         const scaleX = displayedWidth / image.naturalWidth;
         const scaleY = displayedHeight / image.naturalHeight;
 
@@ -1260,7 +1306,7 @@ export default {
       });
     },
     beforeDestroy() {
-      window.removeEventListener('resize', this.updateMarkerPositions);
+      window.removeEventListener('resize', this.updateMarkerPositionsScoped);
       this.stopPalletMovePolling(); // 组件销毁前停止轮询
     },
     handlePalletStorageClick(area, title) {
