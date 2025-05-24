@@ -146,11 +146,11 @@
                 @load="updateMarkerPositions"
               />
               <!-- 上货扫码区域提示 -->
-              <div class="marker-with-panel" data-x="260" data-y="200">
+              <div class="marker-with-panel" data-x="300" data-y="700">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
-                  :class="['position-bottom', { 'always-show': true }]"
+                  :class="['position-top', { 'always-show': true }]"
                 >
                   <div class="data-panel-header">
                     <span>立库来料</span>
@@ -158,7 +158,7 @@
                   <div class="data-panel-content">
                     <div class="data-panel-row">
                       <span class="data-panel-label">当前扫码信息：</span>
-                      <span>{{ twoEightHundredPalletCode || '--' }}</span>
+                      <span>{{ twoFiveHundredPalletCode || '--' }}</span>
                     </div>
                     <div class="data-panel-row">
                       <span class="data-panel-label">来料名称：</span>
@@ -172,15 +172,13 @@
                 </div>
               </div>
               <!-- 添加带按钮的点位示例 -->
-              <div class="marker-with-button" data-x="1020" data-y="60">
+              <div class="marker-with-button" data-x="1020" data-y="760">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
-                  @click="
-                    handlePalletStorageClick('A', '拆垛间缓存库位(A1-A100)')
-                  "
+                  @click="handlePalletStorageClick('H', '缓存库位(H1-H100)')"
                 >
-                  拆垛间缓存库位(A1-A100)
+                  缓存库位(H1-H100)
                 </button>
               </div>
             </div>
@@ -221,51 +219,28 @@
           :class="{ 'can-move': item.trayInfo }"
         >
           <div class="storage-card-header">
-            <span v-if="currentStorageTitle !== 'AGV2-2队列'"
+            <span
               >位置 {{ item.queueName + item.queueNum
               }}<el-tag
                 v-if="item.trayStatus === '0'"
                 size="small"
                 style="margin-left: 15px"
-                >在2800等待AGV取货</el-tag
+                >在AGV5-1等待取货</el-tag
               ><el-tag
                 v-if="item.trayStatus === '1'"
                 type="warning"
                 size="small"
                 style="margin-left: 15px"
-                >已在2800取货，正运往缓存区</el-tag
+                >已在AGV5-1取货，正运往缓存区</el-tag
               ><el-tag
                 v-if="item.trayStatus === '2'"
                 size="small"
                 type="success"
                 style="margin-left: 15px"
-                >已送至2楼缓存区</el-tag
-              ><el-tag
-                v-if="item.trayStatus === '3'"
-                size="small"
-                style="margin-left: 15px"
-                >在缓存区等待AGV取货</el-tag
-              ><el-tag
-                v-if="item.trayStatus === '4' || item.trayStatus === '5'"
-                size="small"
-                type="warning"
-                style="margin-left: 15px"
-                >已在缓存区取货，正运往目的地</el-tag
+                >已送至H区缓存区</el-tag
               ></span
             >
-            <span v-else
-              >队列序号：{{ index + 1
-              }}<el-tag
-                v-if="item.trayStatus === '6'"
-                size="small"
-                style="margin-left: 15px"
-                >等待一楼AGV取货中</el-tag
-              ></span
-            >
-            <div
-              class="card-actions"
-              v-if="currentStorageTitle !== 'AGV2-2队列' && item.trayInfo"
-            >
+            <div class="card-actions" v-if="item.trayInfo">
               <el-button
                 type="text"
                 size="mini"
@@ -297,81 +272,6 @@
                     <span class="label">产品描述：</span>
                     <span class="value">{{
                       item.trayInfoAdd || '暂无描述'
-                    }}</span>
-                  </div>
-                </div>
-
-                <!-- 状态为2时显示发送图标 -->
-                <div
-                  v-if="
-                    item.trayStatus === '2' &&
-                    currentStorageTitle !== 'AGV2-2队列'
-                  "
-                  class="send-action-icon"
-                >
-                  <el-button
-                    type="text"
-                    @click="item.showSendPanel = true"
-                    v-if="!item.showSendPanel"
-                  >
-                    <i
-                      class="el-icon-position"
-                      style="font-size: 18px; color: #409eff"
-                    ></i>
-                  </el-button>
-                </div>
-
-                <!-- 状态为2且点击了发送图标时显示发送面板 -->
-                <div
-                  class="send-actions"
-                  v-if="
-                    item.trayStatus === '2' &&
-                    item.showSendPanel &&
-                    currentStorageTitle !== 'AGV2-2队列'
-                  "
-                >
-                  <el-autocomplete
-                    v-model="item.targetPosition"
-                    :fetch-suggestions="querySearchEndAsync"
-                    placeholder="发送至"
-                    size="mini"
-                    class="target-input"
-                  ></el-autocomplete>
-                  <div class="action-buttons">
-                    <el-button
-                      type="primary"
-                      size="mini"
-                      @click="handleExecutePallet(item)"
-                    >
-                      <i class="el-icon-position"></i>
-                      发送
-                    </el-button>
-                    <el-button
-                      size="mini"
-                      style="margin-left: 0px"
-                      @click="item.showSendPanel = false"
-                    >
-                      取消
-                    </el-button>
-                  </div>
-                </div>
-
-                <!-- 状态为3、4、5时显示发送状态 -->
-                <div
-                  class="sending-status"
-                  v-if="
-                    ['3', '4', '5'].includes(item.trayStatus) &&
-                    currentStorageTitle !== 'AGV2-2队列'
-                  "
-                >
-                  <div class="status-text">
-                    <i class="el-icon-loading"></i>
-                    <span>正在发送中</span>
-                  </div>
-                  <div class="destination">
-                    <span class="label">目的地：</span>
-                    <span class="value">{{
-                      item.targetPosition || '未知'
                     }}</span>
                   </div>
                 </div>
@@ -412,7 +312,7 @@
             <el-form label-width="70px" size="small">
               <el-form-item label="托盘码">
                 <el-input
-                  v-model="twoEightHundredPalletCode"
+                  v-model="twoFiveHundredPalletCode"
                   placeholder="请输入托盘码"
                 ></el-input>
               </el-form-item>
@@ -427,7 +327,7 @@
             <el-form label-width="70px" size="small">
               <el-form-item label="托盘码">
                 <el-input
-                  v-model="twoEightHundredPalletTestCode"
+                  v-model="twoFiveHundredPalletTestCode"
                   placeholder="请输入托盘码"
                 ></el-input>
               </el-form-item>
@@ -435,25 +335,6 @@
                 <el-button type="primary" size="small" @click="testDatabase"
                   >数据库接口测试</el-button
                 >
-              </el-form-item>
-            </el-form>
-          </div>
-        </div>
-
-        <!-- 添加AGV调度条件模拟 -->
-        <div class="test-section">
-          <h3>AGV调度条件模拟</h3>
-          <div class="test-form">
-            <el-form size="small">
-              <el-form-item>
-                <el-button
-                  type="warning"
-                  size="small"
-                  @click="simulateAGV1Signal"
-                  :loading="agvSignalLoading"
-                >
-                  模拟一楼提升机出口有货信号
-                </el-button>
               </el-form-item>
             </el-form>
           </div>
@@ -534,23 +415,6 @@
     >
       <div class="agv-task-management">
         <div class="task-header">
-          <el-tabs
-            v-model="currentAgvTaskFloor"
-            @tab-click="handleAgvTaskTabChange"
-          >
-            <el-tab-pane
-              label="一层AGV运行中任务管理"
-              name="floor1"
-            ></el-tab-pane>
-            <el-tab-pane
-              label="二层AGV运行中任务管理"
-              name="floor2"
-            ></el-tab-pane>
-            <el-tab-pane
-              label="三层AGV运行中任务管理"
-              name="floor3"
-            ></el-tab-pane>
-          </el-tabs>
           <el-button
             type="primary"
             size="small"
@@ -645,11 +509,9 @@ export default {
     return {
       currentStorageTitle: '', // 新增：用于抽屉标题
       palletStorageDrawerVisible: false,
-      currentStorageArea: 'A', // 当前选中的缓存区
+      currentStorageArea: 'H', // 当前选中的缓存区
       palletStorageAreas: {
-        A: [],
-        B: [],
-        C: []
+        H: []
       },
       testPanelVisible: false,
       scanInfo: {
@@ -659,67 +521,11 @@ export default {
       activeLogType: 'running',
       runningLogs: [], // 修改为空数组
       alarmLogs: [], // 修改为空数组
-      scheduleData: [
-        { name: '三楼灌装线A', plan: 0, completed: 0 },
-        { name: '三楼灌装线B', plan: 0, completed: 0 },
-        { name: '一楼灌装线A', plan: 0, completed: 0 },
-        { name: '一楼灌装线B', plan: 0, completed: 0 }
-      ],
       logId: 0, // 添加日志ID计数器
-      // 输送线当前运行状态
-      conveyorStatus: {
-        bit0: '0', // PLC系统运行中运行信号
-        bit1: '0', // PLC系统故障信号
-        bit2: '0', // 1#机器人故障信号
-        bit3: '0', // 2#机器人故障信号
-        bit4: '0', // 去三楼托盘提升机故障信号
-        bit5: '0', // 去一楼托盘提升机故障信号
-        bit6: '0', // 去三楼灌装车间A输送线故障信号
-        bit7: '0', // 去三楼灌装车间B输送线故障信号
-        bit8: '0', // 去一楼灌装车间A输送线故障信号
-        bit9: '0' // 去一楼灌装车间B输送线故障信号
-      },
-      // 1#机器人状态
-      robotStatus: {
-        bit0: '0', // 值为1时，1#机器人A缺货
-        bit1: '0', // 值为1时，1#机器人A需要清理空托盘
-        bit2: '0', // 值为1时，1#机器人B缺货
-        bit3: '0', // 值为1时，1#机器人B需要清理空托盘
-        bit4: '0', // 值为1时，1#机器人C缺货
-        bit5: '0', // 值为1时，1#机器人C需要清理空托盘
-        bit6: '0', // 值为1时，1#机器人D缺货
-        bit7: '0', // 值为1时，1#机器人D需要清理空托盘
-        bit8: '0', // 值为1时，1#机器人E缺货
-        bit9: '0', // 值为1时，1#机器人E需要清理空托盘
-        bit10: '0', // 值为1时，去三楼灌装车间A输送线启动中
-        bit11: '0' // 值为1时，去三楼灌装车间B输送线启动中
-      },
-      // 2#机器人状态
-      robotStatus2: {
-        bit0: '0', // 值为1时，2#机器人A缺货
-        bit1: '0', // 值为1时，2#机器人A需要清理空托盘
-        bit2: '0', // 值为1时，2#机器人B缺货
-        bit3: '0', // 值为1时，2#机器人B需要清理空托盘
-        bit4: '0', // 值为1时，2#机器人C缺货
-        bit5: '0', // 值为1时，2#机器人C需要清理空托盘
-        bit6: '0', // 值为1时，2#机器人D缺货
-        bit7: '0', // 值为1时，2#机器人D需要清理空托盘
-        bit8: '0', // 值为1时，2#机器人E缺货
-        bit9: '0', // 值为1时，2#机器人E需要清理空托盘
-        bit10: '0', // 值为1时，去一楼灌装车间A输送线启动中
-        bit11: '0' // 值为1时，去一楼灌装车间B输送线启动中
-      },
       // AGV调度条件
       agvScheduleCondition: {
-        bit0: '0', // 2800转盘处允许接货（同时允许上位机读取扫码结果）
-        bit1: '0', // 2500接驳口允许接货（同时允许上位机读取扫码结果）
-        bit2: '0', // AGV2-2空闲允许放货
-        bit3: '0', // AGV2-3空闲允许放货
-        bit4: '0', // AGV3-1有货需AGV接走（三楼提升机出口）
-        bit5: '0' // AGV1-1有货需AGV接走（一楼提升机出口）
+        bit1: '0' // 2500接驳口允许接货（同时允许上位机读取扫码结果）
       },
-      // 2800接货处条码
-      twoEightHundredPalletCode: '',
       // 2500接货处条码
       twoFiveHundredPalletCode: '',
       isRefreshing: false,
@@ -729,30 +535,19 @@ export default {
         status: 'idle' // idle没任务 singleRunning单次任务执行中 cycleRunning多次任务执行中
       },
       // 新增起点点位列表
-      startAgvPositions: [
-        { value: 'AGV2-1' },
-        { value: 'AGV1-1' },
-        { value: 'AGV3-1' }
-      ],
+      startAgvPositions: [{ value: 'AGV5-1' }],
       // 新增终点点位列表
-      endAgvPositions: [{ value: 'AGV2-2' }, { value: 'AGV2-3' }],
+      endAgvPositions: [],
       // 定义一个map，可以通过type获取到code
       agvCodeMap: {
-        'AGV2-1': '102',
-        'AGV2-2': '201',
-        'AGV2-3': '301',
-        '2500输送线': '101',
-        'AGV1-1': '202',
-        'AGV3-1': '302'
+        'AGV5-1': '101'
       },
-      twoEightHundredPalletTestCode: '',
-      agvSignalLoading: false,
+      twoFiveHundredPalletTestCode: '',
       // 托盘移动功能所需数据
       movePalletDialogVisible: false,
       sourcePalletToMove: null,
       selectedTargetPalletIdForMove: null,
       agvTaskDialogVisible: false,
-      currentAgvTaskFloor: 'floor1',
       currentAgvTasks: [],
       agvTasksLoading: false
     };
@@ -792,67 +587,17 @@ export default {
   },
   mounted() {
     this.initializeMarkers();
-    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
-    //   // 使用位运算优化赋值
-    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+    ipcRenderer.on('receivedMsg', (event, values, values2) => {
+      // 使用位运算优化赋值
+      const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
 
-    //   // 输送线当前运行状态
-    //   let word2 = this.convertToWord(values.DBW2);
-    //   this.conveyorStatus.bit0 = getBit(word2, 8);
-    //   this.conveyorStatus.bit1 = getBit(word2, 9);
-    //   this.conveyorStatus.bit2 = getBit(word2, 10);
-    //   this.conveyorStatus.bit3 = getBit(word2, 11);
-    //   this.conveyorStatus.bit4 = getBit(word2, 12);
-    //   this.conveyorStatus.bit5 = getBit(word2, 13);
-    //   this.conveyorStatus.bit6 = getBit(word2, 14);
-    //   this.conveyorStatus.bit7 = getBit(word2, 15);
-    //   this.conveyorStatus.bit8 = getBit(word2, 0);
-    //   this.conveyorStatus.bit9 = getBit(word2, 1);
+      // AGV调度条件
+      let word8 = this.convertToWord(values.DBW8);
+      this.agvScheduleCondition.bit1 = getBit(word8, 9);
 
-    //   // 1#机器人状态
-    //   let word4 = this.convertToWord(values.DBW4);
-    //   this.robotStatus.bit0 = getBit(word4, 8);
-    //   this.robotStatus.bit1 = getBit(word4, 9);
-    //   this.robotStatus.bit2 = getBit(word4, 10);
-    //   this.robotStatus.bit3 = getBit(word4, 11);
-    //   this.robotStatus.bit4 = getBit(word4, 12);
-    //   this.robotStatus.bit5 = getBit(word4, 13);
-    //   this.robotStatus.bit6 = getBit(word4, 14);
-    //   this.robotStatus.bit7 = getBit(word4, 15);
-    //   this.robotStatus.bit8 = getBit(word4, 0);
-    //   this.robotStatus.bit9 = getBit(word4, 1);
-    //   this.robotStatus.bit10 = getBit(word4, 2);
-    //   this.robotStatus.bit11 = getBit(word4, 3);
-
-    //   // 2#机器人状态
-    //   let word6 = this.convertToWord(values.DBW6);
-    //   this.robotStatus2.bit0 = getBit(word6, 8);
-    //   this.robotStatus2.bit1 = getBit(word6, 9);
-    //   this.robotStatus2.bit2 = getBit(word6, 10);
-    //   this.robotStatus2.bit3 = getBit(word6, 11);
-    //   this.robotStatus2.bit4 = getBit(word6, 12);
-    //   this.robotStatus2.bit5 = getBit(word6, 13);
-    //   this.robotStatus2.bit6 = getBit(word6, 14);
-    //   this.robotStatus2.bit7 = getBit(word6, 15);
-    //   this.robotStatus2.bit8 = getBit(word6, 0);
-    //   this.robotStatus2.bit9 = getBit(word6, 1);
-    //   this.robotStatus2.bit10 = getBit(word6, 2);
-    //   this.robotStatus2.bit11 = getBit(word6, 3);
-
-    //   // AGV调度条件
-    //   let word8 = this.convertToWord(values.DBW8);
-    //   this.agvScheduleCondition.bit0 = getBit(word8, 8);
-    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
-    //   this.agvScheduleCondition.bit2 = getBit(word8, 10);
-    //   this.agvScheduleCondition.bit3 = getBit(word8, 11);
-    //   this.agvScheduleCondition.bit4 = getBit(word8, 12);
-    //   this.agvScheduleCondition.bit5 = getBit(word8, 13);
-
-    //   // 2800接货处条码
-    //   this.twoEightHundredPalletCode = values.DBB10 ?? '';
-    //   // 2500接货处条码
-    //   this.twoFiveHundredPalletCode = values.DBB20 ?? '';
-    // });
+      // 2500接货处条码
+      this.twoFiveHundredPalletCode = values.DBB20 ?? '';
+    });
   },
   watch: {
     isActive(newVal) {
@@ -862,104 +607,18 @@ export default {
         });
       }
     },
-    // 监听agvScheduleCondition.bit0,
-    'agvScheduleCondition.bit0': {
+    // 监听agvScheduleCondition.bit1,
+    'agvScheduleCondition.bit1': {
       async handler(newVal) {
         if (newVal === '1') {
-          this.addLog(`2800接货处扫码数据：${this.twoEightHundredPalletCode}`);
+          this.addLog(`2500接货处扫码数据：${this.twoFiveHundredPalletCode}`);
           // 自动触发AGV运输任务，从2800到C区缓存位
-          this.getTrayInfo(this.twoEightHundredPalletCode);
-        }
-      }
-    },
-    // 监听 agvScheduleCondition.bit5，如果变为1，则出发一段逻辑，我自己写
-    'agvScheduleCondition.bit5': {
-      async handler(newVal) {
-        if (newVal === '1') {
-          this.addLog('检测到一楼提升机出口有货需AGV接走');
-          // 自动触发AGV运输任务，从AGV1-1到C区缓存位
-          this.handleAGV1ToStorage();
+          this.getTrayInfo(this.twoFiveHundredPalletCode);
         }
       }
     }
   },
   methods: {
-    getStatusText(status) {
-      const statusTexts = {
-        0: '空闲中',
-        1: '处理中'
-      };
-      return statusTexts[status];
-    },
-    // 处理一楼提升机出口有货需AGV接走的方法
-    async handleAGV1ToStorage() {
-      try {
-        // 查询C队列托盘情况，查找第一个空闲的托盘位置
-        const params = {
-          queueName: 'AGV2-2'
-        };
-        const res = await HttpUtil.post('/queue_info/queryQueueList', params);
-        // 把trayStatus 为5的托盘保留下来
-        const trayList = res.data.filter((item) => item.trayStatus === '5');
-        if (trayList && trayList.length > 0) {
-          // 输出日志
-          this.addLog(`AGV2-2托盘出库信息：${JSON.stringify(trayList)}`);
-          // 调用AGV过来运货
-          const robotTaskCode = await this.sendAgvCommand(
-            'PF-FMR-COMMON-JH4',
-            '202',
-            trayList[0].targetPosition
-          );
-          if (robotTaskCode !== '') {
-            // 更新托盘状态
-            const param = {
-              id: trayList[0].id,
-              trayStatus: '6',
-              robotTaskCode
-            };
-            await HttpUtil.post('/queue_info/update', param)
-              .then((resUpdate) => {
-                if (resUpdate.data == 1) {
-                  this.addLog(
-                    `已给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务`
-                  );
-                } else {
-                  this.addLog(
-                    `给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务失败`
-                  );
-                }
-              })
-              .catch((err) => {
-                this.addLog(
-                  `给一楼目的地：${trayList[0].targetPosition}托盘发送AGV运输任务失败：${err.message}`
-                );
-              });
-          }
-        }
-      } catch (err) {
-        this.addLog(
-          `处理一楼提升机出口货物失败: ${err.message || '未知错误'}`,
-          'alarm'
-        );
-      }
-    },
-    // 移除托盘
-    async deleteAgv22Pallet(item) {
-      const params = {
-        id: item.id
-      };
-      await HttpUtil.post('/queue_info/delete', params)
-        .then((res) => {
-          if (res.data == 1) {
-            this.addLog(`AGV2-2托盘出库成功：${item.trayInfo}`);
-          } else {
-            this.addLog(`AGV2-2托盘出库失败：${item.trayInfo}`);
-          }
-        })
-        .catch((err) => {
-          this.addLog(`AGV2-2托盘出库失败：${err.message}`);
-        });
-    },
     initializeMarkers() {
       this.$nextTick(() => {
         // 确保只选择当前组件内的元素
@@ -1035,7 +694,6 @@ export default {
     },
     beforeDestroy() {
       window.removeEventListener('resize', this.updateMarkerPositionsScoped);
-      this.stopPalletMovePolling(); // 组件销毁前停止轮询
     },
     handlePalletStorageClick(area, title) {
       this.currentStorageArea = area;
@@ -1119,22 +777,22 @@ export default {
       this.testPanelVisible = true;
     },
     testDatabase() {
-      if (!this.twoEightHundredPalletTestCode) {
+      if (!this.twoFiveHundredPalletTestCode) {
         this.$message.warning('请填写完整的测试托盘码');
         return;
       }
       // 调用接口读取托盘信息
-      this.getTrayInfo(this.twoEightHundredPalletTestCode);
+      this.getTrayInfo(this.twoFiveHundredPalletTestCode);
       // 关闭测试面板
       this.testPanelVisible = false;
     },
     simulateScan() {
-      if (!this.twoEightHundredPalletCode) {
+      if (!this.twoFiveHundredPalletCode) {
         this.$message.warning('请填写完整的扫码信息');
         return;
       }
       // 调用接口读取托盘信息
-      this.getTrayInfo(this.twoEightHundredPalletCode);
+      this.getTrayInfo(this.twoFiveHundredPalletCode);
       // 关闭测试面板
       this.testPanelVisible = false;
     },
@@ -1142,7 +800,7 @@ export default {
       const params = {
         traceid: trayCode.trim(),
         zt: 'N',
-        cheijian: '2800'
+        cheijian: '2500'
       };
       HttpUtil.post('/order_info/selectList', params)
         .then((res) => {
@@ -1166,40 +824,25 @@ export default {
         });
     },
     dealScanCode(trayCode, wmsInfo) {
-      // 判断目的地-先不判断，先直接写死进入C队列
-      // 查询C队列托盘情况，查找第一个空闲的托盘位置
-      // 如果wmsInfo.mudidi为'2800-1'，进入C队列
-      // 如果wmsInfo.mudidi为'2800-2'，进入A队列
-      // 如果wmsInfo.mudidi为'2800-3'，进入B队列
-      // 如果没有上面，则return 并输出日志
-      let queueName = '';
-      if (wmsInfo.mudidi === '2800-1') {
-        queueName = 'C';
-      } else if (wmsInfo.mudidi === '2800-2') {
-        queueName = 'A';
-      } else if (wmsInfo.mudidi === '2800-3') {
-        queueName = 'B';
-      } else {
-        this.addLog(
-          `托盘入库失败：${trayCode}，目的地为${wmsInfo.mudidi}，不支持的入库目的地`
-        );
-        return;
-      }
+      // 2500车间只有一个目的地：H队列
       HttpUtil.post('/queue_info/queryQueueList', {
-        queueName
+        queueName: 'H'
       })
         .then(async (res) => {
           if (res.data && res.data.length > 0) {
             // 查找第一个空闲的托盘位置
             const emptyPosition = res.data.find(
-              (item) => item.trayInfo === null || item.trayInfo === ''
+              (item) =>
+                (item.trayInfo === null || item.trayInfo === '') &&
+                parseInt(item.queueNum) >= 1 &&
+                parseInt(item.queueNum) <= 15
             );
             if (emptyPosition) {
               // 说明有空缓存位置
               // 根据托盘信息给AGV小车发送指令
               const robotTaskCode = await this.sendAgvCommand(
                 'PF-FMR-COMMON-JH1',
-                '102',
+                '11',
                 emptyPosition.queueName + emptyPosition.queueNum
               );
               if (robotTaskCode !== '') {
@@ -1272,13 +915,6 @@ export default {
         }
       }
     },
-    updateSchedulePlan(index) {
-      // 更新排班计划
-      this.addLog(
-        `已更新${this.scheduleData[index].name}的计划数量为${this.scheduleData[index].plan}`
-      );
-      // 这里可以添加将计划保存到后端的逻辑
-    },
     getProgressColor(completed, plan) {
       // 根据完成度计算进度条颜色
       const percentage = plan === 0 ? 0 : (completed / plan) * 100;
@@ -1334,20 +970,12 @@ export default {
       let fromSiteCode = '';
       let toSiteCode = '';
 
-      if (this.agvSchedule.startPosition === 'AGV2-1') {
+      if (this.agvSchedule.startPosition === 'AGV5-1') {
         // 说明起点是转盘
         fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
 
-        if (this.agvSchedule.endPosition.includes('AGV')) {
-          // 转盘-输送线，起点终点都与plc进行安全交互
-          // todo 这种方式先不处理占位问题
-          taskType = 'PF-FMR-COMMON-JH';
-          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
-          this.agvSchedule.status = 'singleRunning';
-          // 调用发送AGV指令方法
-          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
-        } else {
-          // 转盘-缓存区，只有起点与plc进行安全交互
+        if (this.agvSchedule.endPosition.includes('H')) {
+          // 2500车间终点只有H队列
           taskType = 'PF-FMR-COMMON-JH1';
           toSiteCode = this.agvSchedule.endPosition;
           // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
@@ -1409,123 +1037,14 @@ export default {
               '没有此缓存区位置，请检查输入的缓存区位置是否正确'
             );
           }
-        }
-      } else if (
-        this.agvSchedule.startPosition === 'AGV1-1' ||
-        this.agvSchedule.startPosition === 'AGV3-1'
-      ) {
-        // 说明起点是AGV1-1或AGV3-1
-        fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
-        if (
-          (this.agvSchedule.startPosition === 'AGV1-1' &&
-            this.agvSchedule.endPosition.includes('D')) ||
-          (this.agvSchedule.startPosition === 'AGV3-1' &&
-            this.agvSchedule.endPosition.includes('E'))
-        ) {
-          // AGV1-1-输送线，只有终点与plc进行安全交互
-          taskType = 'PF-FMR-COMMON-JH4';
-          toSiteCode = this.agvSchedule.endPosition;
-          this.agvSchedule.status = 'singleRunning';
-          // 调用发送AGV指令方法
-          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
         } else {
-          // 目前没有这种类型，报错
-          taskType = 'ERROR';
-          this.addLog(
-            `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
-          );
-          this.$message.error(
-            `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
-          );
+          this.$message.error('未查到终点信息，请检查输入的终点位置是否正确');
+          this.addLog('未查到终点信息，请检查输入的终点位置是否正确');
         }
       } else {
-        // 说明起点是缓存区
-        fromSiteCode = this.agvSchedule.startPosition;
-        if (this.agvSchedule.endPosition.includes('AGV')) {
-          // 缓存区-输送线，只有终点与plc进行安全交互
-          taskType = 'PF-FMR-COMMON-JH2';
-          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
-          // 判断起点缓存位有没有托盘占位，如果没有直接报错提示，并返回
-          const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            // fromSiteCode的格式是C1,C2... 截取fromSiteCode第一位为queueName，后面为queueNum
-            queueName: fromSiteCode.charAt(0),
-            queueNum: fromSiteCode.substring(1)
-          });
-          if (res.data && res.data.length > 0) {
-            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
-              this.addLog(`起点：${fromSiteCode}没有信息，请扫码录入信息。`);
-              this.$message.error(
-                `起点：${fromSiteCode}没有信息，请扫码录入信息。`
-              );
-            } else {
-              this.agvSchedule.status = 'singleRunning';
-              // 调用发送AGV指令方法
-              const robotTaskCode = await this.sendAgvCommand(
-                taskType,
-                fromSiteCode,
-                toSiteCode
-              );
-              if (robotTaskCode !== '') {
-                // 缓存区-输送线
-                const param = {
-                  id: res.data[0].id,
-                  trayStatus: '3', // -在缓存区等待AGV取货
-                  robotTaskCode,
-                  targetPosition: this.agvSchedule.endPosition // 保存目的地信息
-                };
-                HttpUtil.post('/queue_info/update', param)
-                  .then((returnRes) => {
-                    if (returnRes.data == 1) {
-                      this.addLog(
-                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
-                      );
-                      this.$message.success(
-                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
-                      );
-                    } else {
-                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
-                      this.$message.error(
-                        `手动调度去往缓存区：${toSiteCode}失败！`
-                      );
-                    }
-                  })
-                  .catch((err) => {
-                    this.addLog(
-                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                    );
-                    this.$message.error(
-                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                    );
-                  });
-              }
-            }
-          } else {
-            this.$message.error(
-              '未查到此起点信息，请检查输入的缓存区位置是否正确'
-            );
-            this.addLog('未查到此起点信息，请检查输入的缓存区位置是否正确');
-          }
-        } else {
-          // 缓存区-缓存区
-          taskType = 'PF-FMR-COMMON-PY';
-          toSiteCode = this.agvSchedule.endPosition;
-          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
-          const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
-            queueName: toSiteCode.charAt(0),
-            queueNum: toSiteCode.substring(1)
-          });
-          if (res.data && res.data.length > 0) {
-            this.$message.error(
-              `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
-            );
-            this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
-            return;
-          }
-          this.agvSchedule.status = 'singleRunning';
-          // 调用发送AGV指令方法
-          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
-        }
+        // 说明起点不是AGV5-1
+        this.$message.error('未查到起点信息，请检查输入的起点位置是否正确');
+        this.addLog('未查到起点信息，请检查输入的起点位置是否正确');
       }
     },
     stopAgvSchedule() {
@@ -1697,19 +1216,6 @@ export default {
           this.$set(item, 'showSendPanel', true);
         });
     },
-    simulateAGV1Signal() {
-      this.agvSignalLoading = true;
-      // 设置bit5为1，触发监听器
-      this.agvScheduleCondition.bit5 = '1';
-      this.addLog('模拟一楼提升机出口有货信号已发送');
-
-      // 1秒后恢复为0
-      setTimeout(() => {
-        this.agvScheduleCondition.bit5 = '0';
-        this.agvSignalLoading = false;
-        this.addLog('模拟一楼提升机出口有货信号已恢复');
-      }, 1000);
-    },
     // --- 托盘移动功能方法 START ---
     handleOpenMovePalletDialog(item) {
       this.loadPalletStorageByArea(this.currentStorageArea); // 重新加载数据
@@ -1803,44 +1309,14 @@ export default {
 
     refreshAgvTasks() {
       this.agvTasksLoading = true;
-      HttpUtil.post('/queue_info/queryQueueList', {})
+      HttpUtil.post('/queue_info/queryQueueList', {
+        queueName: 'H'
+      })
         .then((res) => {
           if (res.data && Array.isArray(res.data)) {
-            // 筛选出trayStatus为'0'、'1'、'3'、'4'、'6'、'7'状态的数据
-            const runningTasks = res.data.filter((item) =>
-              ['0', '1', '3', '4', '6', '7'].includes(item.trayStatus)
+            this.currentAgvTasks = res.data.filter((item) =>
+              ['0', '1'].includes(item.trayStatus)
             );
-
-            // 根据楼层分类
-            const floor1Tasks = runningTasks.filter(
-              (item) =>
-                item.queueName === 'AGV2-2' &&
-                ['6', '7'].includes(item.trayStatus)
-            );
-            const floor2Tasks = runningTasks.filter((item) =>
-              ['0', '1', '3', '4'].includes(item.trayStatus)
-            );
-            const floor3Tasks = runningTasks.filter(
-              (item) =>
-                item.queueName === 'AGV3-1' ||
-                item.targetPosition?.includes('三楼')
-            );
-
-            // 根据当前选中的楼层显示对应的数据
-            switch (this.currentAgvTaskFloor) {
-              case 'floor1':
-                this.currentAgvTasks = floor1Tasks;
-                break;
-              case 'floor2':
-                this.currentAgvTasks = floor2Tasks;
-                break;
-              case 'floor3':
-                this.currentAgvTasks = [];
-                break;
-              default:
-                this.currentAgvTasks = [];
-            }
-            console.log(this.currentAgvTasks);
           } else {
             this.currentAgvTasks = [];
             this.$message.warning('未获取到任务数据');
@@ -1854,10 +1330,6 @@ export default {
         .finally(() => {
           this.agvTasksLoading = false;
         });
-    },
-
-    handleAgvTaskTabChange() {
-      this.refreshAgvTasks();
     },
 
     cancelAgvTask(task) {
@@ -1901,14 +1373,8 @@ export default {
     getAgvTaskStatusText(status) {
       // 根据trayStatus状态返回对应的文本描述
       const statusMap = {
-        0: '在2800等待AGV取货',
-        1: '已在2800取货，正往缓存区运送',
-        2: '已送至2楼缓存区',
-        3: '在缓存区等待AGV取货',
-        4: '已在缓存区取货，正往运往目的地',
-        5: '已送至2楼目的地',
-        6: '等待一楼AGV取货',
-        7: 'AGV已在一楼AGV1-1取货，正运往目的地'
+        0: '在AGV5-1等待取货',
+        1: '已在AGV5-1取货，正运往缓存区'
       };
 
       return statusMap[status] || '未知状态';
@@ -3097,14 +2563,6 @@ export default {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
-
-    .el-tabs {
-      flex: 1;
-    }
-
-    .el-button {
-      margin-left: 16px;
-    }
   }
 
   .task-table {
