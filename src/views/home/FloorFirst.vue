@@ -1414,7 +1414,7 @@ export default {
       const params = {
         traceid: trayCode.trim(),
         zt: 'N',
-        cheijian: '2800'
+        chejian: '2800'
       };
       HttpUtil.post('/order_info/selectList', params)
         .then((res) => {

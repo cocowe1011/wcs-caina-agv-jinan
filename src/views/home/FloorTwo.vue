@@ -146,7 +146,7 @@
                 @load="updateMarkerPositions"
               />
               <!-- 上货扫码区域提示 -->
-              <div class="marker-with-panel" data-x="300" data-y="700">
+              <div class="marker-with-panel" data-x="370" data-y="780">
                 <div class="pulse"></div>
                 <div
                   class="data-panel"
@@ -172,13 +172,58 @@
                 </div>
               </div>
               <!-- 添加带按钮的点位示例 -->
-              <div class="marker-with-button" data-x="1020" data-y="760">
+              <div class="marker-with-button" data-x="200" data-y="1360">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
-                  @click="handlePalletStorageClick('H', '缓存库位(H1-H100)')"
+                  @click="handlePalletStorageClick('H', '来料缓存区(H1-H20)')"
                 >
-                  缓存库位(H1-H100)
+                  来料缓存区(H1-H20)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="720" data-y="250">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('H', '2500-1(H21-H40)')"
+                >
+                  2500-1(H21-H49)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="980" data-y="880">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('H', '2500-2(H41-H60)')"
+                >
+                  2500-2(H50-H69)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="1800" data-y="980">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('H', '2500-3(H70-H99)')"
+                >
+                  2500-3(H70-H99)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="2260" data-y="250">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('H', '2500-4(H150-H199)')"
+                >
+                  2500-4(H150-H199)
+                </button>
+              </div>
+              <div class="marker-with-button" data-x="2820" data-y="880">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('H', '2500-5(H100-H119)')"
+                >
+                  2500-5(H100-H119)
                 </button>
               </div>
             </div>
@@ -202,7 +247,7 @@
             type="primary"
             size="mini"
             icon="el-icon-refresh"
-            @click="loadPalletStorageByArea(currentStorageArea)"
+            @click="refreshPalletStorage()"
             :loading="isRefreshing"
             class="title-refresh-button"
           >
@@ -587,17 +632,17 @@ export default {
   },
   mounted() {
     this.initializeMarkers();
-    ipcRenderer.on('receivedMsg', (event, values, values2) => {
-      // 使用位运算优化赋值
-      const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
+    //   // 使用位运算优化赋值
+    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
 
-      // AGV调度条件
-      let word8 = this.convertToWord(values.DBW8);
-      this.agvScheduleCondition.bit1 = getBit(word8, 9);
+    //   // AGV调度条件
+    //   let word8 = this.convertToWord(values.DBW8);
+    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
 
-      // 2500接货处条码
-      this.twoFiveHundredPalletCode = values.DBB20 ?? '';
-    });
+    //   // 2500接货处条码
+    //   this.twoFiveHundredPalletCode = values.DBB20 ?? '';
+    // });
   },
   watch: {
     isActive(newVal) {
@@ -698,12 +743,29 @@ export default {
     handlePalletStorageClick(area, title) {
       this.currentStorageArea = area;
       this.currentStorageTitle = title; // 设置抽屉标题
-      // 打开抽屉前重新查询数据
-      this.loadPalletStorageByArea(area);
+
+      // 从标题中提取H区范围
+      const rangeInfo = this.extractRangeFromTitle(title);
+
+      // 打开抽屉前重新查询数据，并传入范围信息
+      this.loadPalletStorageByArea(area, rangeInfo);
       this.palletStorageDrawerVisible = true;
     },
+
+    // 从标题中提取H区的范围
+    extractRangeFromTitle(title) {
+      // 匹配类似 "H1-H20", "H21-H49" 这样的格式
+      const rangeMatch = title.match(/H(\d+)-H(\d+)/i);
+      if (rangeMatch && rangeMatch.length === 3) {
+        return {
+          start: parseInt(rangeMatch[1], 10),
+          end: parseInt(rangeMatch[2], 10)
+        };
+      }
+      return null;
+    },
     // 加载指定区域的托盘存储数据
-    loadPalletStorageByArea(area) {
+    loadPalletStorageByArea(area, rangeInfo) {
       this.isRefreshing = true;
 
       const params = {
@@ -714,12 +776,30 @@ export default {
         .then((res) => {
           if (res.data && Array.isArray(res.data)) {
             // 为每个托盘项添加showSendPanel属性
-            const dataWithSendPanel = res.data.map((item) => {
+            let dataWithSendPanel = res.data.map((item) => {
               return {
                 ...item,
                 showSendPanel: false
               };
             });
+
+            // 如果有范围信息，按范围过滤数据
+            if (
+              rangeInfo &&
+              rangeInfo.start !== undefined &&
+              rangeInfo.end !== undefined
+            ) {
+              dataWithSendPanel = dataWithSendPanel.filter((item) => {
+                // 从queueNum字段提取数字，进行范围筛选
+                const queueNum = parseInt(item.queueNum, 10);
+                return (
+                  !isNaN(queueNum) &&
+                  queueNum >= rangeInfo.start &&
+                  queueNum <= rangeInfo.end
+                );
+              });
+            }
+
             // 如果API返回的数据已经是格式化好的，直接使用
             this.$set(this.palletStorageAreas, area, dataWithSendPanel);
           } else {
@@ -800,7 +880,7 @@ export default {
       const params = {
         traceid: trayCode.trim(),
         zt: 'N',
-        cheijian: '2500'
+        chejian: '2500'
       };
       HttpUtil.post('/order_info/selectList', params)
         .then((res) => {
@@ -890,7 +970,8 @@ export default {
     switchStorageArea(area) {
       this.currentStorageArea = area;
       // 切换区域时重新加载数据
-      this.loadPalletStorageByArea(area);
+      const rangeInfo = this.extractRangeFromTitle(this.currentStorageTitle);
+      this.loadPalletStorageByArea(area, rangeInfo);
     },
     // 添加新的日志方法
     addLog(message, type = 'running') {
@@ -1218,7 +1299,7 @@ export default {
     },
     // --- 托盘移动功能方法 START ---
     handleOpenMovePalletDialog(item) {
-      this.loadPalletStorageByArea(this.currentStorageArea); // 重新加载数据
+      this.refreshPalletStorage(); // 使用新方法重新加载数据
       this.sourcePalletToMove = JSON.parse(JSON.stringify(item)); // 深拷贝
       this.selectedTargetPalletIdForMove = null; // 重置选择
       this.movePalletDialogVisible = true;
@@ -1290,7 +1371,7 @@ export default {
         if (res.data == 1) {
           // 假设后端返回的成功标识
           this.$message.success('托盘移动成功！');
-          this.loadPalletStorageByArea(this.currentStorageArea); // 刷新列表
+          this.refreshPalletStorage(); // 使用新方法刷新列表
           this.resetMovePalletDialog();
         } else {
           const errorMsg = res && res.message ? res.message : '未知错误';
@@ -1305,6 +1386,12 @@ export default {
     showAgvTaskManagement() {
       this.agvTaskDialogVisible = true;
       this.refreshAgvTasks();
+    },
+
+    // 根据区域和标题刷新托盘存储数据
+    refreshPalletStorage() {
+      const rangeInfo = this.extractRangeFromTitle(this.currentStorageTitle);
+      this.loadPalletStorageByArea(this.currentStorageArea, rangeInfo);
     },
 
     refreshAgvTasks() {
