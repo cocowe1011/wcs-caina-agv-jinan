@@ -243,6 +243,25 @@
       <template #title>
         <div class="drawer-title-container">
           <span>{{ currentStorageTitle }}</span>
+          <!-- 添加批量解锁按钮 -->
+          <div
+            v-if="
+              currentStorageArea === 'H' &&
+              currentStorageTitle.includes('来料缓存区')
+            "
+            class="title-actions"
+          >
+            <el-button
+              type="warning"
+              size="mini"
+              icon="el-icon-unlock"
+              @click="batchUnlockPallets"
+              :disabled="!hasSelectedPallets"
+              class="title-action-button"
+            >
+              批量解锁
+            </el-button>
+          </div>
           <el-button
             type="primary"
             size="mini"
@@ -261,31 +280,73 @@
           v-for="(item, index) in currentStoragePositions"
           :key="index"
           class="storage-card"
-          :class="{ 'can-move': item.trayInfo }"
+          :class="{
+            'can-move': item.trayInfo,
+            'is-locked': item.isLock === '1'
+          }"
         >
           <div class="storage-card-header">
-            <span
-              >位置 {{ item.queueName + item.queueNum
-              }}<el-tag
-                v-if="item.trayStatus === '0'"
-                size="small"
-                style="margin-left: 15px"
-                >在AGV5-1等待取货</el-tag
-              ><el-tag
-                v-if="item.trayStatus === '1'"
-                type="warning"
-                size="small"
-                style="margin-left: 15px"
-                >已在AGV5-1取货，正运往缓存区</el-tag
-              ><el-tag
-                v-if="item.trayStatus === '2'"
-                size="small"
-                type="success"
-                style="margin-left: 15px"
-                >已送至H区缓存区</el-tag
-              ></span
-            >
+            <div class="card-title">
+              <span
+                v-if="
+                  currentStorageArea === 'H' && parseInt(item.queueNum) <= 20
+                "
+              >
+                <el-checkbox
+                  v-model="item.selected"
+                  @change="handleItemSelect(item)"
+                  v-if="item.trayInfo"
+                >
+                </el-checkbox>
+              </span>
+              <span
+                >位置 {{ item.queueName + item.queueNum
+                }}<el-tag
+                  v-if="item.trayStatus === '0'"
+                  size="small"
+                  style="margin-left: 15px"
+                  >在AGV5-1等待取货</el-tag
+                ><el-tag
+                  v-if="item.trayStatus === '1'"
+                  type="warning"
+                  size="small"
+                  style="margin-left: 15px"
+                  >已在AGV5-1取货，正运往缓存区</el-tag
+                ><el-tag
+                  v-if="item.trayStatus === '2'"
+                  size="small"
+                  type="success"
+                  style="margin-left: 15px"
+                  >已送至H区缓存区</el-tag
+                ></span
+              >
+            </div>
             <div class="card-actions" v-if="item.trayInfo">
+              <!-- 添加上锁/解锁按钮 -->
+              <template
+                v-if="
+                  currentStorageArea === 'H' && parseInt(item.queueNum) <= 20
+                "
+              >
+                <el-button
+                  v-if="item.isLock !== '1'"
+                  type="text"
+                  size="mini"
+                  @click="handleLockPallet(item)"
+                >
+                  <i class="el-icon-lock"></i>
+                  上锁
+                </el-button>
+                <el-button
+                  v-else
+                  type="text"
+                  size="mini"
+                  @click="handleUnlockPallet(item)"
+                >
+                  <i class="el-icon-unlock"></i>
+                  解锁
+                </el-button>
+              </template>
               <el-button
                 type="text"
                 size="mini"
@@ -312,12 +373,24 @@
                   <div class="storage-info-row">
                     <span class="label">托盘码：</span>
                     <span class="value">{{ item.trayInfo }}</span>
+                    <el-tag
+                      v-if="item.isLock === '1'"
+                      size="mini"
+                      type="warning"
+                      class="lock-tag"
+                    >
+                      <i class="el-icon-lock"></i> 已上锁
+                    </el-tag>
                   </div>
                   <div class="storage-info-row product-desc">
                     <span class="label">产品描述：</span>
                     <span class="value">{{
                       item.trayInfoAdd || '暂无描述'
                     }}</span>
+                  </div>
+                  <div class="storage-info-row" v-if="item.mudidi">
+                    <span class="label">目的地：</span>
+                    <span class="value">{{ item.mudidi || '--' }}</span>
                   </div>
                 </div>
               </div>
@@ -594,7 +667,11 @@ export default {
       selectedTargetPalletIdForMove: null,
       agvTaskDialogVisible: false,
       currentAgvTasks: [],
-      agvTasksLoading: false
+      agvTasksLoading: false,
+      // 新增定时器相关
+      agvTimerInterval: null,
+      // 批量解锁选中的托盘ID
+      selectedPalletIds: []
     };
   },
   computed: {
@@ -628,10 +705,20 @@ export default {
     },
     unreadAlarms() {
       return this.alarmLogs.filter((log) => log.unread).length;
+    },
+    // 是否有选中的托盘
+    hasSelectedPallets() {
+      if (this.currentStorageArea !== 'H') return false;
+      return this.currentStoragePositions.some(
+        (item) =>
+          item.trayInfo && item.selected && parseInt(item.queueNum) <= 20
+      );
     }
   },
   mounted() {
     this.initializeMarkers();
+    // 启动定时器
+    this.startAgvTimer();
     // ipcRenderer.on('receivedMsg', (event, values, values2) => {
     //   // 使用位运算优化赋值
     //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
@@ -738,6 +825,8 @@ export default {
       });
     },
     beforeDestroy() {
+      // 清除定时器
+      this.stopAgvTimer();
       window.removeEventListener('resize', this.updateMarkerPositionsScoped);
     },
     handlePalletStorageClick(area, title) {
@@ -904,41 +993,37 @@ export default {
         });
     },
     dealScanCode(trayCode, wmsInfo) {
-      // 2500车间只有一个目的地：H队列
+      // 2500车间扫码后只有一个目的地：H队列(来料缓存区H1-H20)
       HttpUtil.post('/queue_info/queryQueueList', {
         queueName: 'H'
       })
         .then(async (res) => {
           if (res.data && res.data.length > 0) {
-            // 查找第一个空闲的托盘位置
+            // 查找第一个空闲的托盘位置在来料缓存区(H1-H20)
             const emptyPosition = res.data.find(
               (item) =>
                 (item.trayInfo === null || item.trayInfo === '') &&
                 parseInt(item.queueNum) >= 1 &&
-                parseInt(item.queueNum) <= 15
+                parseInt(item.queueNum) <= 20
             );
             if (emptyPosition) {
               // 说明有空缓存位置
-              // 根据托盘信息给AGV小车发送指令
-              const robotTaskCode = await this.sendAgvCommand(
-                'PF-FMR-COMMON-JH1',
-                '11',
-                emptyPosition.queueName + emptyPosition.queueNum
-              );
-              if (robotTaskCode !== '') {
-                // 更新托盘信息
-                const param = {
-                  id: emptyPosition.id,
-                  trayInfo: trayCode,
-                  trayStatus: '0',
-                  robotTaskCode,
-                  trayInfoAdd: wmsInfo.descrC
-                };
-                HttpUtil.post('/queue_info/update', param)
-                  .then(() => {
-                    this.$message.success('托盘已入库');
+              // 更新托盘信息
+              const param = {
+                id: emptyPosition.id,
+                trayInfo: trayCode,
+                trayStatus: '', // 初始状态为空
+                trayInfoAdd: wmsInfo.descrC,
+                isLock: '1', // 默认上锁
+                targetPosition: '', // 保存目的地信息
+                mudidi: wmsInfo.mudidi // 保存目的地信息
+              };
+              HttpUtil.post('/queue_info/update', param)
+                .then((res) => {
+                  if (res.data == 1) {
+                    this.$message.success('托盘已入库到来料缓存区');
                     this.addLog(
-                      `托盘已入库：${trayCode}, 缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}`
+                      `托盘已入库：${trayCode}, 来料缓存区位置：${emptyPosition.queueName}${emptyPosition.queueNum}, 目的地：${wmsInfo.mudidi}`
                     );
                     // 回更WMS信息
                     HttpUtil.post('/order_info/update', {
@@ -951,20 +1036,25 @@ export default {
                       .catch((err) => {
                         this.addLog(`托盘入库成功，回更WMS信息失败：${err}`);
                       });
-                  })
-                  .catch((err) => {
+                  } else {
                     this.$message.error('托盘入库失败，请重试');
-                    this.addLog(`托盘入库失败：${trayCode},${err}`);
-                  });
-              }
+                    this.addLog(`托盘入库失败：${trayCode}`);
+                  }
+                })
+                .catch((err) => {
+                  this.$message.error('托盘入库失败，请重试');
+                  this.addLog(`托盘入库失败：${trayCode},${err}`);
+                });
             } else {
-              this.$message.error('缓存区没有空闲位置');
-              this.addLog(`${trayCode} 托盘入库失败，缓存区没有空闲位置`);
+              this.$message.error('来料缓存区(H1-H20)没有空闲位置');
+              this.addLog(
+                `${trayCode} 托盘入库失败，来料缓存区(H1-H20)没有空闲位置`
+              );
             }
           }
         })
         .catch((err) => {
-          console.error('查询C队列托盘情况失败:', err);
+          console.error('查询H队列托盘情况失败:', err);
         });
     },
     switchStorageArea(area) {
@@ -1136,64 +1226,64 @@ export default {
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
-      // this.addLog(
-      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      // );
-      // return Date.now().toString();
-      // 组装入参
-      const params = {
-        taskType: taskType,
-        targetRoute: [
-          {
-            type: 'SITE',
-            code: fromSiteCode
-          },
-          {
-            type: 'SITE',
-            code: toSiteCode
-          }
-        ]
-      };
       this.addLog(
         `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       );
-      try {
-        // 发送AGV指令
-        const res = await HttpUtilAGV.post(
-          '/rcs/rtas/api/robot/controller/task/submit',
-          params
-        );
-        if (res.code === 'SUCCESS') {
-          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-          // 成功时返回robotTaskCode
-          return res.data.robotTaskCode;
-        } else {
-          // 处理各种错误类型
-          let errorMsg = '';
-          switch (res.errorCode) {
-            case 'Err_TaskTypeNotSupport':
-              errorMsg = '任务类型不支持';
-              break;
-            case 'Err_RobotGroupsNotMatch':
-              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
-              break;
-            case 'Err_RobotCodeNotMatch':
-              errorMsg = '机器人编号与任务不匹配，无法调度';
-              break;
-            case 'Err_TargetRouteError':
-              errorMsg = '任务路径参数有误';
-              break;
-            default:
-              errorMsg = res.message || '未知错误';
-          }
-          this.addLog(`AGV指令发送失败: ${errorMsg}`);
-          return '';
-        }
-      } catch (err) {
-        console.error('发送AGV指令失败:', err);
-        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-        return '';
-      }
+      return Date.now().toString();
+      // 组装入参
+      // const params = {
+      //   taskType: taskType,
+      //   targetRoute: [
+      //     {
+      //       type: 'SITE',
+      //       code: fromSiteCode
+      //     },
+      //     {
+      //       type: 'SITE',
+      //       code: toSiteCode
+      //     }
+      //   ]
+      // };
+      // this.addLog(
+      //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      // );
+      // try {
+      //   // 发送AGV指令
+      //   const res = await HttpUtilAGV.post(
+      //     '/rcs/rtas/api/robot/controller/task/submit',
+      //     params
+      //   );
+      //   if (res.code === 'SUCCESS') {
+      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+      //     // 成功时返回robotTaskCode
+      //     return res.data.robotTaskCode;
+      //   } else {
+      //     // 处理各种错误类型
+      //     let errorMsg = '';
+      //     switch (res.errorCode) {
+      //       case 'Err_TaskTypeNotSupport':
+      //         errorMsg = '任务类型不支持';
+      //         break;
+      //       case 'Err_RobotGroupsNotMatch':
+      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+      //         break;
+      //       case 'Err_RobotCodeNotMatch':
+      //         errorMsg = '机器人编号与任务不匹配，无法调度';
+      //         break;
+      //       case 'Err_TargetRouteError':
+      //         errorMsg = '任务路径参数有误';
+      //         break;
+      //       default:
+      //         errorMsg = res.message || '未知错误';
+      //     }
+      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
+      //     return '';
+      //   }
+      // } catch (err) {
+      //   console.error('发送AGV指令失败:', err);
+      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+      //   return '';
+      // }
     },
     handleStartSelect(item) {
       this.agvSchedule.startPosition = item.value;
@@ -1522,6 +1612,230 @@ export default {
         console.error('发送AGV指令失败:', err);
         this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
         return '';
+      }
+    },
+    handleLockPallet(item) {
+      // 上锁托盘
+      HttpUtil.post('/queue_info/update', {
+        id: item.id,
+        isLock: '1'
+      })
+        .then((res) => {
+          if (res.data == 1) {
+            this.$message.success('托盘已上锁');
+            this.addLog(`托盘${item.trayInfo}已上锁`);
+            item.isLock = '1';
+          } else {
+            this.$message.error('上锁失败');
+          }
+        })
+        .catch((err) => {
+          this.$message.error(`上锁失败: ${err}`);
+        });
+    },
+    handleUnlockPallet(item) {
+      // 解锁托盘
+      HttpUtil.post('/queue_info/update', {
+        id: item.id,
+        isLock: '0'
+      })
+        .then((res) => {
+          if (res.data == 1) {
+            this.$message.success('托盘已解锁');
+            this.addLog(`托盘${item.trayInfo}已解锁`);
+            item.isLock = '0';
+          } else {
+            this.$message.error('解锁失败');
+          }
+        })
+        .catch((err) => {
+          this.$message.error(`解锁失败: ${err}`);
+        });
+    },
+    handleItemSelect(item) {
+      // 选择/取消选择托盘
+      if (item.selected) {
+        this.selectedPalletIds.push(item.id);
+      } else {
+        const index = this.selectedPalletIds.indexOf(item.id);
+        if (index > -1) {
+          this.selectedPalletIds.splice(index, 1);
+        }
+      }
+    },
+
+    // 批量解锁选中托盘
+    batchUnlockPallets() {
+      const selectedItems = this.currentStoragePositions.filter(
+        (item) => item.selected && item.isLock === '1'
+      );
+
+      if (selectedItems.length === 0) {
+        this.$message.warning('未选择任何上锁的托盘');
+        return;
+      }
+
+      const updates = selectedItems.map((item) => ({
+        id: item.id,
+        isLock: '0' // 解锁
+      }));
+
+      HttpUtil.post('/queue_info/updateByList', updates)
+        .then((res) => {
+          if (res.data > 0) {
+            this.$message.success(`成功解锁${updates.length}个托盘`);
+            this.addLog(`批量解锁了${updates.length}个托盘`);
+            // 更新本地数据
+            selectedItems.forEach((item) => {
+              item.isLock = '0';
+              item.selected = false;
+            });
+            this.selectedPalletIds = [];
+          } else {
+            this.$message.error('批量解锁失败');
+          }
+        })
+        .catch((err) => {
+          this.$message.error(`批量解锁出错: ${err}`);
+        });
+    },
+
+    // 启动定时器
+    startAgvTimer() {
+      // 每1秒扫描一次解锁的托盘
+      this.agvTimerInterval = setInterval(() => {
+        this.processPendingPallets();
+      }, 2000);
+    },
+
+    // 停止定时器
+    stopAgvTimer() {
+      if (this.agvTimerInterval) {
+        clearInterval(this.agvTimerInterval);
+        this.agvTimerInterval = null;
+      }
+    },
+
+    // 处理待发送的托盘
+    processPendingPallets() {
+      // 查询来料缓存区中已经解锁且状态为''的托盘
+      HttpUtil.post('/queue_info/queryQueueList', {
+        queueName: 'H'
+      })
+        .then(async (res) => {
+          if (res.data && res.data.length > 0) {
+            // 筛选出解锁且状态为''的托盘
+            const unlockdPallets = res.data.filter(
+              (item) =>
+                item.trayInfo &&
+                item.isLock !== '1' &&
+                item.trayStatus === '' &&
+                parseInt(item.queueNum) >= 1 &&
+                parseInt(item.queueNum) <= 20 &&
+                item.mudidi // 确保有目的地
+            );
+
+            // 如果有待处理的托盘，处理第一个
+            if (unlockdPallets.length > 0) {
+              await this.sendPalletToDestinationByQueue(unlockdPallets[0]);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('查询H队列托盘情况失败:', err);
+        });
+    },
+
+    // 根据目的地发送托盘到相应队列
+    async sendPalletToDestinationByQueue(pallet) {
+      // 根据目的地选择不同的队列范围
+      let queueRange = {
+        start: 0,
+        end: 0
+      };
+
+      // 设置对应目的地的队列范围
+      switch (pallet.mudidi) {
+        case '2500-1':
+          queueRange.start = 21;
+          queueRange.end = 49;
+          break;
+        case '2500-2':
+          queueRange.start = 50;
+          queueRange.end = 69;
+          break;
+        case '2500-3':
+          queueRange.start = 70;
+          queueRange.end = 99;
+          break;
+        case '2500-4':
+          queueRange.start = 150;
+          queueRange.end = 199;
+          break;
+        case '2500-5':
+          queueRange.start = 100;
+          queueRange.end = 119;
+          break;
+        default:
+          this.addLog(
+            `托盘${pallet.trayInfo}的目的地${pallet.mudidi}不正确，无法发送`
+          );
+          return;
+      }
+
+      // 查找目标区域的空闲位置
+      try {
+        const response = await HttpUtil.post('/queue_info/queryQueueList', {
+          queueName: 'H'
+        });
+
+        if (response.data && response.data.length > 0) {
+          // 找到目标队列范围内第一个空闲位置
+          const targetPosition = response.data.find(
+            (item) =>
+              (item.trayInfo === null || item.trayInfo === '') &&
+              parseInt(item.queueNum) >= queueRange.start &&
+              parseInt(item.queueNum) <= queueRange.end
+          );
+
+          if (targetPosition) {
+            // 发送AGV命令
+            const robotTaskCode = await this.sendAgvCommand(
+              'PF-FMR-COMMON-JH2', // 从缓存区到指定位置
+              pallet.queueName + pallet.queueNum, // 源位置
+              targetPosition.queueName + targetPosition.queueNum // 目标位置
+            );
+
+            if (robotTaskCode !== '') {
+              // 更新源托盘状态
+              await HttpUtil.post('/queue_info/updateByList', [
+                {
+                  id: pallet.id,
+                  trayStatus: '0', // 更新为等待AGV取货状态
+                  robotTaskCode,
+                  targetPosition:
+                    targetPosition.queueName + targetPosition.queueNum,
+                  targetId: targetPosition.id
+                },
+                {
+                  id: targetPosition.id, // 给目标位置上个锁
+                  isLock: '1'
+                }
+              ]);
+
+              this.addLog(
+                `定时器扫描：托盘${pallet.trayInfo}已从${pallet.queueName}${pallet.queueNum}发送至${pallet.mudidi}区域的${targetPosition.queueName}${targetPosition.queueNum}`
+              );
+            }
+          } else {
+            this.addLog(
+              `定时器扫描：无法发送托盘${pallet.trayInfo}，${pallet.mudidi}区域(H${queueRange.start}-H${queueRange.end})没有空闲位置`
+            );
+          }
+        }
+      } catch (err) {
+        this.addLog(`发送托盘${pallet.trayInfo}失败: ${err}`);
+        console.error(`发送托盘${pallet.trayInfo}失败:`, err);
       }
     }
   }
@@ -2190,6 +2504,17 @@ export default {
       overflow: hidden;
       transition: all 0.3s ease;
       cursor: pointer;
+
+      // 添加上锁状态样式
+      &.is-locked {
+        border: 1px solid rgba(255, 156, 0, 0.5);
+        box-shadow: 0 0 8px rgba(255, 156, 0, 0.3);
+
+        .storage-card-header {
+          background: rgba(255, 156, 0, 0.15);
+        }
+      }
+
       .storage-card-header {
         background: rgba(64, 158, 255, 0.1);
         padding: 12px 16px;
@@ -2200,6 +2525,13 @@ export default {
         display: flex;
         justify-content: space-between;
         align-items: center;
+
+        .card-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
         .card-actions {
           display: flex;
           gap: 8px;
@@ -2259,6 +2591,19 @@ export default {
 
             .value {
               font-weight: 500;
+            }
+
+            .lock-tag {
+              margin-left: 10px;
+              font-size: 10px;
+              padding: 0 4px;
+              height: 18px;
+              line-height: 16px;
+
+              i {
+                margin-right: 2px;
+                font-size: 10px;
+              }
             }
           }
 
@@ -2389,6 +2734,13 @@ export default {
     width: 100%; /* 占据整个头部宽度 */
     color: #fff; /* 保持原有标题颜色 */
     font-size: 18px; /* 保持原有标题字体大小 */
+  }
+
+  .title-actions {
+    margin-left: auto;
+    margin-right: 10px;
+    display: flex;
+    gap: 8px;
   }
 
   .title-refresh-button {
