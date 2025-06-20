@@ -953,7 +953,11 @@ export default {
             trayStatus: '',
             robotTaskCode: '',
             trayInfoAdd: '',
-            targetPosition: ''
+            targetPosition: '',
+            isWaitCancel: '',
+            isLock: '',
+            mudidi: '',
+            targetId: 0
           })
             .then((res) => {
               if (res.data == 1) {
