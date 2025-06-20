@@ -286,13 +286,33 @@
         >
           <!-- 上锁蒙版 -->
           <div
-            v-if="item.isLock === '1' && item.trayInfo"
+            v-if="
+              item.isLock === '1' &&
+              (parseInt(item.queueNum) >= 1 && parseInt(item.queueNum) <= 20
+                ? item.trayInfo
+                : true)
+            "
             class="lock-overlay"
-            @click.stop="handleUnlockCard(item)"
+            :class="{
+              'no-unlock': !(
+                parseInt(item.queueNum) >= 1 && parseInt(item.queueNum) <= 20
+              )
+            }"
+            @click.stop="
+              parseInt(item.queueNum) >= 1 && parseInt(item.queueNum) <= 20
+                ? handleUnlockCard(item)
+                : null
+            "
           >
             <div class="lock-content">
               <i class="el-icon-unlock lock-icon"></i>
-              <span class="lock-text">锁定中，点击解锁</span>
+              <span class="lock-text">
+                {{
+                  parseInt(item.queueNum) >= 1 && parseInt(item.queueNum) <= 20
+                    ? '锁定中，点击解锁'
+                    : '此位置已被占用，正在等待AGV运输'
+                }}
+              </span>
             </div>
           </div>
           <div class="storage-card-header">
@@ -687,7 +707,12 @@ export default {
       // 批量解锁相关
       batchUnlockDialogVisible: false,
       unlockablePallets: [],
-      batchUnlockLoading: false
+      batchUnlockLoading: false,
+      // 序号发送辅助变量
+      currentSendIndex: {
+        '2500-1': 21, // 2500-1的起始序号
+        '2500-4': 150 // 2500-4的起始序号
+      }
     };
   },
   computed: {
@@ -1513,7 +1538,10 @@ export default {
         'trayStatus',
         'robotTaskCode',
         'trayInfoAdd',
-        'targetPosition'
+        'targetPosition',
+        'isLock',
+        'mudidi',
+        'targetId'
       ];
       const updates = [];
 
@@ -1873,14 +1901,74 @@ export default {
         });
 
         if (response.data && response.data.length > 0) {
-          // 找到目标队列范围内第一个空闲位置
-          const targetPosition = response.data.find(
-            (item) =>
-              (item.trayInfo === null || item.trayInfo === '') &&
-              item.isLock !== '1' &&
-              parseInt(item.queueNum) >= queueRange.start &&
-              parseInt(item.queueNum) <= queueRange.end
-          );
+          let targetPosition = null;
+
+          // 对于2500-1和2500-4，按照序号顺序发送
+          if (pallet.mudidi === '2500-1' || pallet.mudidi === '2500-4') {
+            // 检查当前序号是否已达到最大值
+            if (this.currentSendIndex[pallet.mudidi] > queueRange.end) {
+              // 检查该区域是否全部为空
+              const areaItems = response.data.filter(
+                (item) =>
+                  parseInt(item.queueNum) >= queueRange.start &&
+                  parseInt(item.queueNum) <= queueRange.end
+              );
+
+              const hasOccupied = areaItems.some(
+                (item) => item.trayInfo && item.trayInfo !== ''
+              );
+
+              if (!hasOccupied) {
+                // 全部为空，重置序号从第一个开始
+                this.currentSendIndex[pallet.mudidi] = queueRange.start;
+                this.addLog(
+                  `${pallet.mudidi}区域缓存位全部为空，重置序号从${queueRange.start}开始`
+                );
+              } else {
+                // 还有占用的位置，不发送
+                this.addLog(
+                  `定时器扫描：${pallet.mudidi}区域已发送到最后一个序号${queueRange.end}，等待缓存位全部为空后重新开始`
+                );
+                return;
+              }
+            }
+
+            // 查找当前序号的位置
+            const currentIndexPosition = response.data.find(
+              (item) =>
+                parseInt(item.queueNum) ===
+                  this.currentSendIndex[pallet.mudidi] && item.queueName === 'H'
+            );
+
+            if (currentIndexPosition) {
+              // 检查当前序号位置是否被占用
+              if (
+                (currentIndexPosition.trayInfo === null ||
+                  currentIndexPosition.trayInfo === '') &&
+                currentIndexPosition.isLock !== '1'
+              ) {
+                targetPosition = currentIndexPosition;
+              } else {
+                // 位置被占用，序号+1，等待下次扫描
+                this.currentSendIndex[pallet.mudidi]++;
+                this.addLog(
+                  `定时器扫描：${pallet.mudidi}区域H${
+                    this.currentSendIndex[pallet.mudidi] - 1
+                  }位置被占用，序号+1至H${this.currentSendIndex[pallet.mudidi]}`
+                );
+                return;
+              }
+            }
+          } else {
+            // 其他目的地按原逻辑查找第一个空闲位置
+            targetPosition = response.data.find(
+              (item) =>
+                (item.trayInfo === null || item.trayInfo === '') &&
+                item.isLock !== '1' &&
+                parseInt(item.queueNum) >= queueRange.start &&
+                parseInt(item.queueNum) <= queueRange.end
+            );
+          }
 
           if (targetPosition) {
             // 发送AGV命令
@@ -1905,11 +1993,21 @@ export default {
                   id: targetPosition.id, // 给目标位置上个锁
                   isLock: '1'
                 }
-              ]);
+              ]).then((res) => {
+                this.addLog(
+                  `定时器扫描：托盘${pallet.trayInfo}已从${pallet.queueName}${pallet.queueNum}发送至${pallet.mudidi}区域的${targetPosition.queueName}${targetPosition.queueNum}`
+                );
 
-              this.addLog(
-                `定时器扫描：托盘${pallet.trayInfo}已从${pallet.queueName}${pallet.queueNum}发送至${pallet.mudidi}区域的${targetPosition.queueName}${targetPosition.queueNum}`
-              );
+                // 对于2500-1和2500-4，序号+1
+                if (pallet.mudidi === '2500-1' || pallet.mudidi === '2500-4') {
+                  this.currentSendIndex[pallet.mudidi]++;
+                  this.addLog(
+                    `${pallet.mudidi}区域下次发送序号更新为H${
+                      this.currentSendIndex[pallet.mudidi]
+                    }`
+                  );
+                }
+              });
             }
           } else {
             this.addLog(
@@ -2612,6 +2710,14 @@ export default {
 
         &:hover {
           background: rgba(0, 0, 0, 0.7);
+        }
+
+        &.no-unlock {
+          cursor: not-allowed;
+
+          &:hover {
+            background: rgba(0, 0, 0, 0.6);
+          }
         }
 
         .lock-content {
