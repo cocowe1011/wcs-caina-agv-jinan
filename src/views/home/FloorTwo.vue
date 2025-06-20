@@ -363,14 +363,6 @@
                   <div class="storage-info-row">
                     <span class="label">托盘码：</span>
                     <span class="value">{{ item.trayInfo }}</span>
-                    <el-tag
-                      v-if="item.isLock === '1'"
-                      size="mini"
-                      type="warning"
-                      class="lock-tag"
-                    >
-                      <i class="el-icon-lock"></i> 已上锁
-                    </el-tag>
                   </div>
                   <div class="storage-info-row product-desc">
                     <span class="label">产品描述：</span>
@@ -2541,7 +2533,6 @@ export default {
         right: 0;
         bottom: 0;
         background: rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(2px);
         display: flex;
         align-items: center;
         justify-content: center;
