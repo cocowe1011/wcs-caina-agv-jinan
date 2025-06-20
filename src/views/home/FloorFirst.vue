@@ -1104,65 +1104,65 @@ export default {
   mounted() {
     this.initializeMarkers();
     this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
-    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
-    //   // 使用位运算优化赋值
-    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+    ipcRenderer.on('receivedMsg', (event, values, values2) => {
+      // 使用位运算优化赋值
+      const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
 
-    //   // 输送线当前运行状态
-    //   let word2 = this.convertToWord(values.DBW2);
-    //   this.conveyorStatus.bit0 = getBit(word2, 8);
-    //   this.conveyorStatus.bit1 = getBit(word2, 9);
-    //   this.conveyorStatus.bit2 = getBit(word2, 10);
-    //   this.conveyorStatus.bit3 = getBit(word2, 11);
-    //   this.conveyorStatus.bit4 = getBit(word2, 12);
-    //   this.conveyorStatus.bit5 = getBit(word2, 13);
-    //   this.conveyorStatus.bit6 = getBit(word2, 14);
-    //   this.conveyorStatus.bit7 = getBit(word2, 15);
-    //   this.conveyorStatus.bit8 = getBit(word2, 0);
-    //   this.conveyorStatus.bit9 = getBit(word2, 1);
+      // 输送线当前运行状态
+      let word2 = this.convertToWord(values.DBW2);
+      this.conveyorStatus.bit0 = getBit(word2, 8);
+      this.conveyorStatus.bit1 = getBit(word2, 9);
+      this.conveyorStatus.bit2 = getBit(word2, 10);
+      this.conveyorStatus.bit3 = getBit(word2, 11);
+      this.conveyorStatus.bit4 = getBit(word2, 12);
+      this.conveyorStatus.bit5 = getBit(word2, 13);
+      this.conveyorStatus.bit6 = getBit(word2, 14);
+      this.conveyorStatus.bit7 = getBit(word2, 15);
+      this.conveyorStatus.bit8 = getBit(word2, 0);
+      this.conveyorStatus.bit9 = getBit(word2, 1);
 
-    //   // 1#机器人状态
-    //   let word4 = this.convertToWord(values.DBW4);
-    //   this.robotStatus.bit0 = getBit(word4, 8);
-    //   this.robotStatus.bit1 = getBit(word4, 9);
-    //   this.robotStatus.bit2 = getBit(word4, 10);
-    //   this.robotStatus.bit3 = getBit(word4, 11);
-    //   this.robotStatus.bit4 = getBit(word4, 12);
-    //   this.robotStatus.bit5 = getBit(word4, 13);
-    //   this.robotStatus.bit6 = getBit(word4, 14);
-    //   this.robotStatus.bit7 = getBit(word4, 15);
-    //   this.robotStatus.bit8 = getBit(word4, 0);
-    //   this.robotStatus.bit9 = getBit(word4, 1);
-    //   this.robotStatus.bit10 = getBit(word4, 2);
-    //   this.robotStatus.bit11 = getBit(word4, 3);
+      // 1#机器人状态
+      let word4 = this.convertToWord(values.DBW4);
+      this.robotStatus.bit0 = getBit(word4, 8);
+      this.robotStatus.bit1 = getBit(word4, 9);
+      this.robotStatus.bit2 = getBit(word4, 10);
+      this.robotStatus.bit3 = getBit(word4, 11);
+      this.robotStatus.bit4 = getBit(word4, 12);
+      this.robotStatus.bit5 = getBit(word4, 13);
+      this.robotStatus.bit6 = getBit(word4, 14);
+      this.robotStatus.bit7 = getBit(word4, 15);
+      this.robotStatus.bit8 = getBit(word4, 0);
+      this.robotStatus.bit9 = getBit(word4, 1);
+      this.robotStatus.bit10 = getBit(word4, 2);
+      this.robotStatus.bit11 = getBit(word4, 3);
 
-    //   // 2#机器人状态
-    //   let word6 = this.convertToWord(values.DBW6);
-    //   this.robotStatus2.bit0 = getBit(word6, 8);
-    //   this.robotStatus2.bit1 = getBit(word6, 9);
-    //   this.robotStatus2.bit2 = getBit(word6, 10);
-    //   this.robotStatus2.bit3 = getBit(word6, 11);
-    //   this.robotStatus2.bit4 = getBit(word6, 12);
-    //   this.robotStatus2.bit5 = getBit(word6, 13);
-    //   this.robotStatus2.bit6 = getBit(word6, 14);
-    //   this.robotStatus2.bit7 = getBit(word6, 15);
-    //   this.robotStatus2.bit8 = getBit(word6, 0);
-    //   this.robotStatus2.bit9 = getBit(word6, 1);
-    //   this.robotStatus2.bit10 = getBit(word6, 2);
-    //   this.robotStatus2.bit11 = getBit(word6, 3);
+      // 2#机器人状态
+      let word6 = this.convertToWord(values.DBW6);
+      this.robotStatus2.bit0 = getBit(word6, 8);
+      this.robotStatus2.bit1 = getBit(word6, 9);
+      this.robotStatus2.bit2 = getBit(word6, 10);
+      this.robotStatus2.bit3 = getBit(word6, 11);
+      this.robotStatus2.bit4 = getBit(word6, 12);
+      this.robotStatus2.bit5 = getBit(word6, 13);
+      this.robotStatus2.bit6 = getBit(word6, 14);
+      this.robotStatus2.bit7 = getBit(word6, 15);
+      this.robotStatus2.bit8 = getBit(word6, 0);
+      this.robotStatus2.bit9 = getBit(word6, 1);
+      this.robotStatus2.bit10 = getBit(word6, 2);
+      this.robotStatus2.bit11 = getBit(word6, 3);
 
-    //   // AGV调度条件
-    //   let word8 = this.convertToWord(values.DBW8);
-    //   this.agvScheduleCondition.bit0 = getBit(word8, 8);
-    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
-    //   this.agvScheduleCondition.bit2 = getBit(word8, 10);
-    //   this.agvScheduleCondition.bit3 = getBit(word8, 11);
-    //   this.agvScheduleCondition.bit4 = getBit(word8, 12);
-    //   this.agvScheduleCondition.bit5 = getBit(word8, 13);
+      // AGV调度条件
+      let word8 = this.convertToWord(values.DBW8);
+      this.agvScheduleCondition.bit0 = getBit(word8, 8);
+      this.agvScheduleCondition.bit1 = getBit(word8, 9);
+      this.agvScheduleCondition.bit2 = getBit(word8, 10);
+      this.agvScheduleCondition.bit3 = getBit(word8, 11);
+      this.agvScheduleCondition.bit4 = getBit(word8, 12);
+      this.agvScheduleCondition.bit5 = getBit(word8, 13);
 
-    //   // 2800接货处条码
-    //   this.twoEightHundredPalletCode = values.DBB10 ?? '';
-    // });
+      // 2800接货处条码
+      this.twoEightHundredPalletCode = values.DBB10 ?? '';
+    });
   },
   watch: {
     isActive(newVal) {
@@ -1863,64 +1863,64 @@ export default {
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
-      this.addLog(
-        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      );
-      return Date.now().toString();
-      // 组装入参
-      // const params = {
-      //   taskType: taskType,
-      //   targetRoute: [
-      //     {
-      //       type: 'SITE',
-      //       code: fromSiteCode
-      //     },
-      //     {
-      //       type: 'SITE',
-      //       code: toSiteCode
-      //     }
-      //   ]
-      // };
       // this.addLog(
       //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       // );
-      // try {
-      //   // 发送AGV指令
-      //   const res = await HttpUtilAGV.post(
-      //     '/rcs/rtas/api/robot/controller/task/submit',
-      //     params
-      //   );
-      //   if (res.code === 'SUCCESS') {
-      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-      //     // 成功时返回robotTaskCode
-      //     return res.data.robotTaskCode;
-      //   } else {
-      //     // 处理各种错误类型
-      //     let errorMsg = '';
-      //     switch (res.errorCode) {
-      //       case 'Err_TaskTypeNotSupport':
-      //         errorMsg = '任务类型不支持';
-      //         break;
-      //       case 'Err_RobotGroupsNotMatch':
-      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_RobotCodeNotMatch':
-      //         errorMsg = '机器人编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_TargetRouteError':
-      //         errorMsg = '任务路径参数有误';
-      //         break;
-      //       default:
-      //         errorMsg = res.message || '未知错误';
-      //     }
-      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
-      //     return '';
-      //   }
-      // } catch (err) {
-      //   console.error('发送AGV指令失败:', err);
-      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-      //   return '';
-      // }
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        taskType: taskType,
+        targetRoute: [
+          {
+            type: 'SITE',
+            code: fromSiteCode
+          },
+          {
+            type: 'SITE',
+            code: toSiteCode
+          }
+        ]
+      };
+      this.addLog(
+        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/submit',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodeNotMatch':
+              errorMsg = '机器人编号与任务不匹配，无法调度';
+              break;
+            case 'Err_TargetRouteError':
+              errorMsg = '任务路径参数有误';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     },
     startPalletMovePolling() {
       if (this.pollingTimerCtoAGV) {
@@ -2436,61 +2436,61 @@ export default {
     },
     async sendCancelAgvCommand(robotTaskCode, trayInfo) {
       // 测试用，返回当前时间戳
-      this.addLog(
-        `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
-      );
-      return Date.now().toString();
-      // 组装入参
-      // const params = {
-      //   robotTaskCode: robotTaskCode,
-      //   cancelType: 'CANCEL'
-      // };
       // this.addLog(
       //   `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
       // );
-      // try {
-      //   // 发送AGV指令
-      //   const res = await HttpUtilAGV.post(
-      //     '/rcs/rtas/api/robot/controller/task/cancel',
-      //     params
-      //   );
-      //   if (res.code === 'SUCCESS') {
-      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-      //     // 成功时返回robotTaskCode
-      //     return res.data.robotTaskCode;
-      //   } else {
-      //     // 处理各种错误类型
-      //     let errorMsg = '';
-      //     switch (res.errorCode) {
-      //       case 'Err_TaskFinished':
-      //         errorMsg = '任务已结束';
-      //         break;
-      //       case 'Err_TaskNotFound':
-      //         errorMsg = '任务找不到';
-      //         break;
-      //       case 'Err_TaskModifyReject':
-      //         errorMsg = '任务当前无法变更';
-      //         break;
-      //       case 'Err_TaskTypeNotSupport':
-      //         errorMsg = '新任务任务类型不支持';
-      //         break;
-      //       case 'Err_RobotGroupsNotMatch':
-      //         errorMsg = '机器人资源组编号与新任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_RobotCodesNotMatch':
-      //         errorMsg = '机器人编号与新任务不匹配，无法调度';
-      //         break;
-      //       default:
-      //         errorMsg = res.message || '未知错误';
-      //     }
-      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
-      //     return '';
-      //   }
-      // } catch (err) {
-      //   console.error('发送AGV指令失败:', err);
-      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-      //   return '';
-      // }
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        robotTaskCode: robotTaskCode,
+        cancelType: 'CANCEL'
+      };
+      this.addLog(
+        `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/cancel',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskFinished':
+              errorMsg = '任务已结束';
+              break;
+            case 'Err_TaskNotFound':
+              errorMsg = '任务找不到';
+              break;
+            case 'Err_TaskModifyReject':
+              errorMsg = '任务当前无法变更';
+              break;
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '新任务任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与新任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodesNotMatch':
+              errorMsg = '机器人编号与新任务不匹配，无法调度';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     }
   }
 };

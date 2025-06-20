@@ -752,17 +752,17 @@ export default {
     this.initializeMarkers();
     // 启动定时器
     this.startAgvTimer();
-    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
-    //   // 使用位运算优化赋值
-    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+    ipcRenderer.on('receivedMsg', (event, values, values2) => {
+      // 使用位运算优化赋值
+      const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
 
-    //   // AGV调度条件
-    //   let word8 = this.convertToWord(values.DBW8);
-    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
+      // AGV调度条件
+      let word8 = this.convertToWord(values.DBW8);
+      this.agvScheduleCondition.bit1 = getBit(word8, 9);
 
-    //   // 2500接货处条码
-    //   this.twoFiveHundredPalletCode = values.DBB20 ?? '';
-    // });
+      // 2500接货处条码
+      this.twoFiveHundredPalletCode = values.DBB20 ?? '';
+    });
   },
   watch: {
     isActive(newVal) {
@@ -1335,64 +1335,64 @@ export default {
     },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
-      this.addLog(
-        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
-      );
-      return Date.now().toString();
-      // 组装入参
-      // const params = {
-      //   taskType: taskType,
-      //   targetRoute: [
-      //     {
-      //       type: 'SITE',
-      //       code: fromSiteCode
-      //     },
-      //     {
-      //       type: 'SITE',
-      //       code: toSiteCode
-      //     }
-      //   ]
-      // };
       // this.addLog(
       //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       // );
-      // try {
-      //   // 发送AGV指令
-      //   const res = await HttpUtilAGV.post(
-      //     '/rcs/rtas/api/robot/controller/task/submit',
-      //     params
-      //   );
-      //   if (res.code === 'SUCCESS') {
-      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-      //     // 成功时返回robotTaskCode
-      //     return res.data.robotTaskCode;
-      //   } else {
-      //     // 处理各种错误类型
-      //     let errorMsg = '';
-      //     switch (res.errorCode) {
-      //       case 'Err_TaskTypeNotSupport':
-      //         errorMsg = '任务类型不支持';
-      //         break;
-      //       case 'Err_RobotGroupsNotMatch':
-      //         errorMsg = '机器人资源组编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_RobotCodeNotMatch':
-      //         errorMsg = '机器人编号与任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_TargetRouteError':
-      //         errorMsg = '任务路径参数有误';
-      //         break;
-      //       default:
-      //         errorMsg = res.message || '未知错误';
-      //     }
-      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
-      //     return '';
-      //   }
-      // } catch (err) {
-      //   console.error('发送AGV指令失败:', err);
-      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-      //   return '';
-      // }
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        taskType: taskType,
+        targetRoute: [
+          {
+            type: 'SITE',
+            code: fromSiteCode
+          },
+          {
+            type: 'SITE',
+            code: toSiteCode
+          }
+        ]
+      };
+      this.addLog(
+        `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/submit',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodeNotMatch':
+              errorMsg = '机器人编号与任务不匹配，无法调度';
+              break;
+            case 'Err_TargetRouteError':
+              errorMsg = '任务路径参数有误';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     },
     handleStartSelect(item) {
       this.agvSchedule.startPosition = item.value;
@@ -1672,61 +1672,61 @@ export default {
     },
     async sendCancelAgvCommand(robotTaskCode, trayInfo) {
       // 测试用，返回当前时间戳
-      this.addLog(
-        `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
-      );
-      return Date.now().toString();
-      // 组装入参
-      // const params = {
-      //   robotTaskCode: robotTaskCode,
-      //   cancelType: 'CANCEL'
-      // };
       // this.addLog(
       //   `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
       // );
-      // try {
-      //   // 发送AGV指令
-      //   const res = await HttpUtilAGV.post(
-      //     '/rcs/rtas/api/robot/controller/task/cancel',
-      //     params
-      //   );
-      //   if (res.code === 'SUCCESS') {
-      //     this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
-      //     // 成功时返回robotTaskCode
-      //     return res.data.robotTaskCode;
-      //   } else {
-      //     // 处理各种错误类型
-      //     let errorMsg = '';
-      //     switch (res.errorCode) {
-      //       case 'Err_TaskFinished':
-      //         errorMsg = '任务已结束';
-      //         break;
-      //       case 'Err_TaskNotFound':
-      //         errorMsg = '任务找不到';
-      //         break;
-      //       case 'Err_TaskModifyReject':
-      //         errorMsg = '任务当前无法变更';
-      //         break;
-      //       case 'Err_TaskTypeNotSupport':
-      //         errorMsg = '新任务任务类型不支持';
-      //         break;
-      //       case 'Err_RobotGroupsNotMatch':
-      //         errorMsg = '机器人资源组编号与新任务不匹配，无法调度';
-      //         break;
-      //       case 'Err_RobotCodesNotMatch':
-      //         errorMsg = '机器人编号与新任务不匹配，无法调度';
-      //         break;
-      //       default:
-      //         errorMsg = res.message || '未知错误';
-      //     }
-      //     this.addLog(`AGV指令发送失败: ${errorMsg}`);
-      //     return '';
-      //   }
-      // } catch (err) {
-      //   console.error('发送AGV指令失败:', err);
-      //   this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
-      //   return '';
-      // }
+      // return Date.now().toString();
+      // 组装入参
+      const params = {
+        robotTaskCode: robotTaskCode,
+        cancelType: 'CANCEL'
+      };
+      this.addLog(
+        `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
+      );
+      try {
+        // 发送AGV指令
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/task/cancel',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV指令发送成功: ${JSON.stringify(res.data)}`);
+          // 成功时返回robotTaskCode
+          return res.data.robotTaskCode;
+        } else {
+          // 处理各种错误类型
+          let errorMsg = '';
+          switch (res.errorCode) {
+            case 'Err_TaskFinished':
+              errorMsg = '任务已结束';
+              break;
+            case 'Err_TaskNotFound':
+              errorMsg = '任务找不到';
+              break;
+            case 'Err_TaskModifyReject':
+              errorMsg = '任务当前无法变更';
+              break;
+            case 'Err_TaskTypeNotSupport':
+              errorMsg = '新任务任务类型不支持';
+              break;
+            case 'Err_RobotGroupsNotMatch':
+              errorMsg = '机器人资源组编号与新任务不匹配，无法调度';
+              break;
+            case 'Err_RobotCodesNotMatch':
+              errorMsg = '机器人编号与新任务不匹配，无法调度';
+              break;
+            default:
+              errorMsg = res.message || '未知错误';
+          }
+          this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          return '';
+        }
+      } catch (err) {
+        console.error('发送AGV指令失败:', err);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        return '';
+      }
     },
     handleUnlockCard(item) {
       // 单个卡片解锁
