@@ -1770,21 +1770,78 @@ export default {
         fromSiteCode = this.agvSchedule.startPosition;
         if (this.agvSchedule.endPosition.includes('AGV')) {
           // 缓存区-输送线，只有终点与plc进行安全交互
-          taskType = 'PF-FMR-COMMON-JH2';
-          toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
-          // 判断起点缓存位有没有托盘占位，如果没有直接报错提示，并返回
+          // taskType = 'PF-FMR-COMMON-JH2';
+          // toSiteCode = this.agvCodeMap[this.agvSchedule.endPosition];
+          // // 判断起点缓存位有没有托盘占位，如果没有直接报错提示，并返回
+          // const res = await HttpUtil.post('/queue_info/queryQueueList', {
+          //   // fromSiteCode的格式是C1,C2... 截取fromSiteCode第一位为queueName，后面为queueNum
+          //   queueName: fromSiteCode.charAt(0),
+          //   queueNum: fromSiteCode.substring(1)
+          // });
+          // if (res.data && res.data.length > 0) {
+          //   if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
+          //     this.addLog(`起点：${fromSiteCode}没有信息，请扫码录入信息。`);
+          //     this.$message.error(
+          //       `起点：${fromSiteCode}没有信息，请扫码录入信息。`
+          //     );
+          //   } else {
+          //     this.agvSchedule.status = 'singleRunning';
+          //     // 调用发送AGV指令方法
+          //     const robotTaskCode = await this.sendAgvCommand(
+          //       taskType,
+          //       fromSiteCode,
+          //       toSiteCode
+          //     );
+          //     if (robotTaskCode !== '') {
+          //       // 缓存区-输送线
+          //       const param = {
+          //         id: res.data[0].id,
+          //         trayStatus: '3', // -在缓存区等待AGV取货
+          //         robotTaskCode,
+          //         targetPosition: this.agvSchedule.endPosition // 保存目的地信息
+          //       };
+          //       HttpUtil.post('/queue_info/update', param)
+          //         .then((returnRes) => {
+          //           if (returnRes.data == 1) {
+          //             this.addLog(
+          //               `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+          //             );
+          //             this.$message.success(
+          //               `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+          //             );
+          //           } else {
+          //             this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
+          //             this.$message.error(
+          //               `手动调度去往缓存区：${toSiteCode}失败！`
+          //             );
+          //           }
+          //         })
+          //         .catch((err) => {
+          //           this.addLog(
+          //             `手动调度去往缓存区：${toSiteCode}失败！${err}`
+          //           );
+          //           this.$message.error(
+          //             `手动调度去往缓存区：${toSiteCode}失败！${err}`
+          //           );
+          //         });
+          //     }
+          //   }
+          // }
+          this.$message.error('不可直接发送到输送线');
+          this.addLog('不可直接发送到输送线');
+        } else {
+          // 缓存区-缓存区
+          taskType = 'PF-FMR-COMMON-PY';
+          toSiteCode = this.agvSchedule.endPosition;
+          fromSiteCode = this.agvSchedule.startPosition;
+          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
           const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            // fromSiteCode的格式是C1,C2... 截取fromSiteCode第一位为queueName，后面为queueNum
-            queueName: fromSiteCode.charAt(0),
-            queueNum: fromSiteCode.substring(1)
+            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
+            queueName: toSiteCode.charAt(0),
+            queueNum: toSiteCode.substring(1)
           });
           if (res.data && res.data.length > 0) {
             if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
-              this.addLog(`起点：${fromSiteCode}没有信息，请扫码录入信息。`);
-              this.$message.error(
-                `起点：${fromSiteCode}没有信息，请扫码录入信息。`
-              );
-            } else {
               this.agvSchedule.status = 'singleRunning';
               // 调用发送AGV指令方法
               const robotTaskCode = await this.sendAgvCommand(
@@ -1793,21 +1850,20 @@ export default {
                 toSiteCode
               );
               if (robotTaskCode !== '') {
-                // 缓存区-输送线
+                // 缓存区-缓存区
                 const param = {
                   id: res.data[0].id,
-                  trayStatus: '3', // -在缓存区等待AGV取货
+                  trayInfo: '1111111',
+                  trayStatus: '0',
                   robotTaskCode,
-                  targetPosition: this.agvSchedule.endPosition // 保存目的地信息
+                  trayInfoAdd: '临时托盘'
                 };
                 HttpUtil.post('/queue_info/update', param)
                   .then((returnRes) => {
                     if (returnRes.data == 1) {
-                      this.addLog(
-                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
-                      );
+                      this.addLog(`手动调度去往缓存区：${toSiteCode}成功！`);
                       this.$message.success(
-                        `从${fromSiteCode}手动调度去往${toSiteCode}成功！`
+                        `手动调度去往缓存区：${toSiteCode}成功！`
                       );
                     } else {
                       this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
@@ -1825,33 +1881,13 @@ export default {
                     );
                   });
               }
+            } else {
+              this.$message.error(
+                `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+              );
+              this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
             }
-          } else {
-            this.$message.error(
-              '未查到此起点信息，请检查输入的缓存区位置是否正确'
-            );
-            this.addLog('未查到此起点信息，请检查输入的缓存区位置是否正确');
           }
-        } else {
-          // 缓存区-缓存区
-          taskType = 'PF-FMR-COMMON-PY';
-          toSiteCode = this.agvSchedule.endPosition;
-          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
-          const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
-            queueName: toSiteCode.charAt(0),
-            queueNum: toSiteCode.substring(1)
-          });
-          if (res.data && res.data.length > 0) {
-            this.$message.error(
-              `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
-            );
-            this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
-            return;
-          }
-          this.agvSchedule.status = 'singleRunning';
-          // 调用发送AGV指令方法
-          this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
         }
       }
     },

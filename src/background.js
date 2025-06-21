@@ -30,7 +30,6 @@ const fs = require('fs');
 var appTray = null;
 let closeStatus = false;
 var conn = new nodes7();
-var pollingST = null;
 
 // 记录日志的辅助函数
 function logToFile(message) {
@@ -302,26 +301,7 @@ app.on('ready', () => {
       function (err) {}
     );
   });
-  // 同步映射加速器数据
-  // synAccData();
 });
-
-function synAccData() {
-  HttpUtil.get('/box/synAccData')
-    .then(() => {
-      pollingST = setTimeout(() => {
-        clearTimeout(pollingST);
-        synAccData();
-      }, 2000);
-    })
-    .catch((err) => {
-      HttpUtil.get('/box/recoverAccData').catch(() => {});
-      pollingST = setTimeout(() => {
-        clearTimeout(pollingST);
-        synAccData();
-      }, 2000);
-    });
-}
 
 function conPLC() {
   logger.info('开始连接PLC');
