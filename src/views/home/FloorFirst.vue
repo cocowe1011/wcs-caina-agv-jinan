@@ -1218,6 +1218,12 @@ export default {
         const params = {
           queueName: queueName
         };
+        let fromCode = '';
+        if (queueName === 'AGV2-2') {
+          fromCode = '202';
+        } else if (queueName === 'AGV2-3') {
+          fromCode = '302';
+        }
         const res = await HttpUtil.post('/queue_info/queryQueueList', params);
         // 把trayStatus 为5的托盘保留下来
         const trayList = res.data.filter((item) => item.trayStatus === '5');
@@ -1227,7 +1233,7 @@ export default {
           // 调用AGV过来运货
           const robotTaskCode = await this.sendAgvCommand(
             'PF-FMR-COMMON-JH4',
-            this.agvCodeMap[queueName],
+            fromCode,
             trayList[0].targetPosition
           );
           if (robotTaskCode !== '') {
