@@ -415,8 +415,18 @@
           v-for="(item, index) in currentStoragePositions"
           :key="index"
           class="storage-card"
-          :class="{ 'can-move': item.trayInfo }"
+          :class="{
+            'can-move': item.trayInfo,
+            'is-locked': item.isLock === '1'
+          }"
         >
+          <!-- 锁定遮层 -->
+          <div v-if="item.isLock === '1'" class="lock-overlay">
+            <div class="lock-content">
+              <i class="el-icon-lock lock-icon"></i>
+              <span class="lock-text">此位置已被占用，正在等待AGV运输</span>
+            </div>
+          </div>
           <div class="storage-card-header">
             <span
               v-if="
@@ -442,6 +452,18 @@
                 style="margin-left: 15px"
                 >已送至2楼缓存区</el-tag
               ><el-tag
+                v-if="item.trayStatus === '20'"
+                size="small"
+                type="success"
+                style="margin-left: 15px"
+                >在缓存区等待AGV取货</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '21'"
+                size="small"
+                type="success"
+                style="margin-left: 15px"
+                >已在缓存区取货，正运往目的地</el-tag
+              ><el-tag
                 v-if="item.trayStatus === '3'"
                 size="small"
                 style="margin-left: 15px"
@@ -458,7 +480,7 @@
               >队列序号：{{ index + 1
               }}<el-tag
                 v-if="
-                  currentStorageTitle !== 'AGV2-2队列' &&
+                  currentStorageTitle === 'AGV2-2队列' &&
                   item.trayStatus === '6'
                 "
                 size="small"
@@ -466,7 +488,7 @@
                 >等待一楼AGV取货中</el-tag
               ><el-tag
                 v-if="
-                  currentStorageTitle !== 'AGV2-3队列' &&
+                  currentStorageTitle === 'AGV2-3队列' &&
                   item.trayStatus === '6'
                 "
                 size="small"
@@ -1416,7 +1438,11 @@ export default {
             trayStatus: '',
             robotTaskCode: '',
             trayInfoAdd: '',
-            targetPosition: ''
+            targetPosition: '',
+            isWaitCancel: '',
+            isLock: '',
+            mudidi: '',
+            targetId: 0
           })
             .then((res) => {
               if (res.data == 1) {
@@ -1515,7 +1541,9 @@ export default {
           if (res.data && res.data.length > 0) {
             // 查找第一个空闲的托盘位置
             const emptyPosition = res.data.find(
-              (item) => item.trayInfo === null || item.trayInfo === ''
+              (item) =>
+                (item.trayInfo === null || item.trayInfo === '') &&
+                item.isLock !== '1'
             );
             if (emptyPosition) {
               // 说明有空缓存位置
@@ -1659,6 +1687,22 @@ export default {
         this.$message.warning('当前正在循环执行，请先停止循环执行');
         return;
       }
+
+      // 添加确认对话框
+      try {
+        await this.$confirm(
+          `确认执行AGV单次调度任务吗？\n起点：${this.agvSchedule.startPosition}\n终点：${this.agvSchedule.endPosition}`,
+          '确认执行',
+          {
+            confirmButtonText: '确定执行',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        );
+      } catch {
+        // 用户取消了操作
+        return;
+      }
       // PF-FMR-COMMON-JH	转盘-输送线，起点终点都与plc进行安全交互
       // PF-FMR-COMMON-JH1 转盘-缓存区，只有起点与plc进行安全交互
       // PF-FMR-COMMON-JH2 缓存区-输送线，只有终点与plc进行安全交互
@@ -1690,7 +1734,10 @@ export default {
             queueNum: toSiteCode.substring(1)
           });
           if (res.data && res.data.length > 0) {
-            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
+            if (
+              (res.data[0].trayInfo === null || res.data[0].trayInfo === '') &&
+              res.data[0].isLock !== '1'
+            ) {
               this.agvSchedule.status = 'singleRunning';
               // 调用发送AGV指令方法
               const robotTaskCode = await this.sendAgvCommand(
@@ -1840,58 +1887,92 @@ export default {
           taskType = 'PF-FMR-COMMON-PY';
           toSiteCode = this.agvSchedule.endPosition;
           fromSiteCode = this.agvSchedule.startPosition;
-          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
-          const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
-            queueName: toSiteCode.charAt(0),
-            queueNum: toSiteCode.substring(1)
+          // 判断起点缓存位有没有托盘占位，如果没有直接报错提示，并返回
+          const resQiDian = await HttpUtil.post('/queue_info/queryQueueList', {
+            // fromSiteCode的格式是C1,C2... 截取fromSiteCode第一位为queueName，后面为queueNum
+            queueName: fromSiteCode.charAt(0),
+            queueNum: fromSiteCode.substring(1)
           });
-          if (res.data && res.data.length > 0) {
-            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
-              this.agvSchedule.status = 'singleRunning';
-              // 调用发送AGV指令方法
-              const robotTaskCode = await this.sendAgvCommand(
-                taskType,
-                fromSiteCode,
-                toSiteCode
-              );
-              if (robotTaskCode !== '') {
-                // 缓存区-缓存区
-                const param = {
-                  id: res.data[0].id,
-                  trayInfo: '1111111',
-                  trayStatus: '0',
-                  robotTaskCode,
-                  trayInfoAdd: '临时托盘'
-                };
-                HttpUtil.post('/queue_info/update', param)
-                  .then((returnRes) => {
-                    if (returnRes.data == 1) {
-                      this.addLog(`手动调度去往缓存区：${toSiteCode}成功！`);
-                      this.$message.success(
-                        `手动调度去往缓存区：${toSiteCode}成功！`
-                      );
-                    } else {
-                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
-                      this.$message.error(
-                        `手动调度去往缓存区：${toSiteCode}失败！`
-                      );
-                    }
-                  })
-                  .catch((err) => {
-                    this.addLog(
-                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                    );
-                    this.$message.error(
-                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                    );
-                  });
-              }
-            } else {
+          if (resQiDian.data && resQiDian.data.length > 0) {
+            if (
+              resQiDian.data[0].trayInfo === null ||
+              resQiDian.data[0].trayInfo === ''
+            ) {
+              this.addLog(`起点：${fromSiteCode}没有信息，请扫码录入信息。`);
               this.$message.error(
-                `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+                `起点：${fromSiteCode}没有信息，请扫码录入信息。`
               );
-              this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
+            } else {
+              // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
+              const res = await HttpUtil.post('/queue_info/queryQueueList', {
+                // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
+                queueName: toSiteCode.charAt(0),
+                queueNum: toSiteCode.substring(1)
+              });
+              if (res.data && res.data.length > 0) {
+                if (
+                  (res.data[0].trayInfo === null ||
+                    res.data[0].trayInfo === '') &&
+                  res.data[0].isLock !== '1'
+                ) {
+                  this.agvSchedule.status = 'singleRunning';
+                  // 调用发送AGV指令方法
+                  const robotTaskCode = await this.sendAgvCommand(
+                    taskType,
+                    fromSiteCode,
+                    toSiteCode
+                  );
+                  if (robotTaskCode !== '') {
+                    // 缓存区-缓存区
+                    const param = [
+                      {
+                        id: resQiDian.data[0].id,
+                        trayStatus: '20',
+                        robotTaskCode,
+                        targetPosition: toSiteCode,
+                        targetId: res.data[0].id
+                      },
+                      {
+                        id: res.data[0].id,
+                        isLock: '1'
+                      }
+                    ];
+                    HttpUtil.post('/queue_info/updateByList', param)
+                      .then((returnRes) => {
+                        if (returnRes.data == 1) {
+                          this.addLog(
+                            `手动调度去往缓存区：${toSiteCode}成功！`
+                          );
+                          this.$message.success(
+                            `手动调度去往缓存区：${toSiteCode}成功！`
+                          );
+                        } else {
+                          this.addLog(
+                            `手动调度去往缓存区：${toSiteCode}失败！`
+                          );
+                          this.$message.error(
+                            `手动调度去往缓存区：${toSiteCode}失败！`
+                          );
+                        }
+                      })
+                      .catch((err) => {
+                        this.addLog(
+                          `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                        );
+                        this.$message.error(
+                          `手动调度去往缓存区：${toSiteCode}失败！${err}`
+                        );
+                      });
+                  }
+                } else {
+                  this.$message.error(
+                    `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+                  );
+                  this.addLog(
+                    `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
+                  );
+                }
+              }
             }
           }
         }
@@ -2368,7 +2449,9 @@ export default {
           if (res.data && Array.isArray(res.data)) {
             // 筛选出trayStatus为'0'、'1'、'3'、'4'、'6'、'7'状态的数据
             const runningTasks = res.data.filter((item) =>
-              ['0', '1', '3', '4', '6', '7'].includes(item.trayStatus)
+              ['0', '1', '20', '21', '3', '4', '6', '7'].includes(
+                item.trayStatus
+              )
             );
 
             // 根据楼层分类
@@ -2378,7 +2461,7 @@ export default {
                 ['6', '7'].includes(item.trayStatus)
             );
             const floor2Tasks = runningTasks.filter((item) =>
-              ['0', '1', '3', '4'].includes(item.trayStatus)
+              ['0', '1', '20', '21', '3', '4'].includes(item.trayStatus)
             );
             const floor3Tasks = runningTasks.filter(
               (item) =>
@@ -2464,6 +2547,8 @@ export default {
         0: '在2800等待AGV取货',
         1: '已在2800取货，正往缓存区运送',
         2: '已送至2楼缓存区',
+        20: '在缓存区等待AGV取货',
+        21: '已在缓存区取货，正往运往目的地',
         3: '在缓存区等待AGV取货',
         4: '已在缓存区取货，正往运往目的地',
         5: '已送至2楼目的地',
@@ -3200,6 +3285,52 @@ export default {
       overflow: hidden;
       transition: all 0.3s ease;
       cursor: pointer;
+
+      // 添加上锁状态样式
+      &.is-locked {
+        position: relative;
+      }
+
+      // 上锁蒙版样式
+      .lock-overlay {
+        position: absolute;
+        top: 49px; // 跳过标题区域的高度
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: not-allowed;
+        z-index: 10;
+        border-radius: 0 0 8px 8px; // 只有底部圆角
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: rgba(0, 0, 0, 0.7);
+        }
+
+        .lock-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: #fff;
+          font-size: 16px;
+          font-weight: 500;
+
+          .lock-icon {
+            font-size: 24px;
+            color: #e6a23c;
+          }
+
+          .lock-text {
+            font-size: 16px;
+            color: #fff;
+          }
+        }
+      }
+
       .storage-card-header {
         background: rgba(64, 158, 255, 0.1);
         padding: 12px 16px;
