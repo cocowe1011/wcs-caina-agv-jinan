@@ -82,6 +82,7 @@
             class="user-table"
             :header-cell-style="tableHeaderStyle"
             :row-style="tableRowStyle"
+            height="100%"
           >
             <el-table-column label="用户信息" width="200">
               <template slot-scope="scope">
@@ -776,10 +777,12 @@ export default {
 
       .table-wrapper {
         flex: 1;
-        overflow: auto;
+        height: 0;
+        min-height: 300px;
 
         .user-table {
           width: 100%;
+          height: 100%;
 
           .user-info {
             display: flex;

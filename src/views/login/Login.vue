@@ -32,6 +32,7 @@
           <el-input
             placeholder="请输入用户名"
             class="user-code"
+            spellcheck="false"
             v-model="userCode"
           ></el-input>
           <el-input
@@ -39,7 +40,7 @@
             class="user-password"
             type="password"
             v-model="userPassword"
-            autocomplete="off"
+            spellcheck="false"
             show-password
           ></el-input>
           <p class="tips">忘记密码请联系管理员</p>
