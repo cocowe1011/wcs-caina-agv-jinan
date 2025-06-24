@@ -21,6 +21,9 @@
           >
             <el-menu-item index="1">首页</el-menu-item>
             <el-menu-item index="2">业务处理</el-menu-item>
+            <el-menu-item index="3" v-if="userRole === 'ADMIN'"
+              >用户管理</el-menu-item
+            >
             <el-menu-item index="5">关于</el-menu-item>
           </el-menu>
         </div>
@@ -61,10 +64,10 @@
               style="margin-right: 10px"
             ></el-avatar>
             <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item icon="el-icon-close" style="color: #f04134"
-                >注销用户</el-dropdown-item
-              >
-              <el-dropdown-item icon="el-icon-key" command="updatePassword"
+              <el-dropdown-item
+                icon="el-icon-key"
+                command="updatePassword"
+                v-if="userRole !== 'ADMIN'"
                 >修改密码</el-dropdown-item
               >
               <el-dropdown-item icon="el-icon-upload2" command="logout"
@@ -154,7 +157,8 @@ export default {
       updatePasswordForm: {
         newPassword: '',
         newPasswordAgain: ''
-      }
+      },
+      userRole: ''
     };
   },
   watch: {},
@@ -177,6 +181,15 @@ export default {
             if (this.$route.path !== '/homePage/MainPage') {
               this.$router.replace({
                 path: '/homePage/MainPage'
+              });
+            }
+          });
+          break;
+        case '3':
+          this.$nextTick(() => {
+            if (this.$route.path !== '/homePage/userManagement') {
+              this.$router.replace({
+                path: '/homePage/userManagement'
               });
             }
           });
@@ -326,6 +339,8 @@ export default {
     // 给主进程发送消息，更改窗口大小，设置最小大小，默认全屏
     ipcRenderer.send('logStatus', 'login');
     this.changeIcon();
+    // 获取用户角色
+    this.userRole = remote.getGlobal('sharedObject').userInfo.userRole || '';
   },
   mounted() {}
 };

@@ -23,7 +23,7 @@
           ></i>
         </div>
       </div>
-      <div class="login-right-down" v-if="pageMark == 'login'">
+      <div class="login-right-down">
         <p class="title">WCS系统</p>
         <p class="intro">
           欢迎使用WCS系统。简洁、易用的操作页面，全自动化管理全力帮助您提高效率。
@@ -40,11 +40,9 @@
             type="password"
             v-model="userPassword"
             autocomplete="off"
+            show-password
           ></el-input>
-          <p class="tips">
-            没有帐户？<span id="look-help" @click="registerPage">立即注册</span
-            ><span style="margin-left: 185px">忘记密码?</span>
-          </p>
+          <p class="tips">忘记密码请联系管理员</p>
           <el-button
             class="user-login-button"
             type="primary"
@@ -54,72 +52,6 @@
           >
         </div>
       </div>
-      <div class="login-right-down" v-else-if="pageMark == 'register'">
-        <p class="title" style="text-align: center">创建账户</p>
-        <p class="intro" style="width: 100%; text-align: center">
-          已有帐户？<span id="look-help" @click="loginPage">登录</span>
-        </p>
-        <div class="login-form">
-          <el-input
-            placeholder="请输入姓名"
-            ref="userNameRegRef"
-            class="user-code-register"
-            v-model="userNameReg"
-            @blur="showUserNameTips = false"
-            @focus="showUserNameTips = true"
-          ></el-input>
-          <p
-            class="tips"
-            style="margin-bottom: 0; line-height: 3px"
-            v-show="showUserNameTips"
-          >
-            登录人姓名，用于记录订单操作人。
-          </p>
-          <el-input
-            placeholder="请输入注册账号"
-            ref="userCodeRegRef"
-            class="user-code-register"
-            v-model="userCodeReg"
-            style="margin-top: 15px"
-            @blur="showUserCodeTips = false"
-            @focus="showUserCodeTips = true"
-            @input="restrictInput"
-          ></el-input>
-          <p
-            class="tips"
-            style="margin-bottom: 0; line-height: 3px"
-            v-show="showUserCodeTips"
-          >
-            注册账号为数字字母下划线，用于登录系统
-          </p>
-          <el-input
-            placeholder="请输入密码"
-            class="user-password-register"
-            type="password"
-            v-model="userPasswordReg"
-            autocomplete="off"
-            style="margin-top: 15px"
-          ></el-input>
-          <el-input
-            placeholder="确认密码"
-            ref="userPasswordAgainRef"
-            class="user-password-register"
-            type="password"
-            v-model="userPasswordAgain"
-            autocomplete="off"
-            style="margin-top: 15px"
-          ></el-input>
-          <el-button
-            class="user-login-button"
-            type="primary"
-            @click="registerUser"
-            :loading="registerStatus"
-            style="margin-top: 15px"
-            >立即注册</el-button
-          >
-        </div>
-      </div>
-      <div class="login-right-down" v-else></div>
     </div>
     <transition name="fade">
       <div class="zz-spin" v-show="!javaAppStarted">
@@ -146,15 +78,6 @@ export default {
       userCode: '',
       userPassword: '',
       loadingStatus: false,
-      pageMark: 'login',
-      showUserNameTips: false,
-      showUserCodeTips: false,
-      userNameReg: '',
-      userCodeReg: '',
-      userPasswordReg: '',
-      userPasswordAgain: '',
-      registerStatus: false,
-      regex: /^[a-zA-Z0-9_]*$/,
       javaAppStarted: false,
       javaAppUrl: process.env.VUE_APP_BASE_URL + '/status/check',
       maxRetries: 30,
@@ -164,79 +87,6 @@ export default {
   watch: {},
   computed: {},
   methods: {
-    registerUser() {
-      this.registerStatus = true;
-      // 判断非空项
-      if (this.userNameReg == '') {
-        this.$refs.userNameRegRef.focus();
-        this.$message.error('姓名不可为空，请输入！');
-        this.registerStatus = false;
-        return false;
-      }
-      if (this.userCodeReg == '') {
-        this.$refs.userCodeRegRef.focus();
-        this.$message.error('注册账号不可为空，请输入！');
-        this.registerStatus = false;
-        return false;
-      }
-      if (this.userPasswordReg == '') {
-        this.$refs.userPasswordAgainRef.focus();
-        this.$message.error('密码不可为空，请输入！');
-        this.registerStatus = false;
-        return false;
-      }
-      if (this.userPasswordReg !== this.userPasswordAgain) {
-        this.$refs.userPasswordAgainRef.focus();
-        this.$message.error('密码输入不一致，请重新输入！');
-        this.registerStatus = false;
-        return false;
-      }
-      const param = {
-        userName: this.userNameReg,
-        userCode: this.userCodeReg,
-        userPassword: this.userPasswordReg
-      };
-      HttpUtil.post('/userInfo/save', param)
-        .then((res) => {
-          if (res.data == 1) {
-            // 注册成功，跳转登录页面进行登录
-            this.$notify({
-              title: '注册成功！',
-              message: '请输入账号密码进行登录！',
-              type: 'success',
-              duration: 2000
-            });
-            this.pageMark = 'login';
-          } else {
-            console.log(res);
-            // 注册失败，请重试
-            if (res.code == '0001') {
-              this.$refs.userCodeRegRef.focus();
-              this.$message.error(
-                '注册失败！' + this.userCodeReg + res.message
-              );
-            } else {
-              this.$message.error('注册失败！' + res.message);
-            }
-          }
-          this.registerStatus = false;
-        })
-        .catch((err) => {
-          // 注册失败，请重试
-          this.$message.error('注册失败！' + err);
-          this.registerStatus = false;
-        });
-    },
-    loginPage() {
-      this.pageMark = 'login';
-    },
-    registerPage() {
-      this.userNameReg = '';
-      this.userCodeReg = '';
-      this.userPasswordReg = '';
-      this.userPasswordAgain = '';
-      this.pageMark = 'register';
-    },
     login() {
       this.loadingStatus = true;
       // 将账号密码传递后台，判断密码是否正确
@@ -248,12 +98,14 @@ export default {
         .then((res) => {
           if (res.data) {
             remote.getGlobal('sharedObject').userInfo = res.data;
+            // 根据用户角色跳转不同页面
             setTimeout(() => {
               this.loadingStatus = false;
               // 跳转主页
               this.$nextTick(() => {
                 this.$router.replace({
-                  path: '/homePage/welcomPage'
+                  path: '/homePage/welcomPage',
+                  query: { userRole: res.data.userRole }
                 });
               });
             }, 2000);
@@ -266,35 +118,12 @@ export default {
           this.$message.error(err);
           this.loadingStatus = false;
         });
-      // 本地测试时，注释掉上面代码，使用下面代码
-      // remote.getGlobal('sharedObject').userInfo = {
-      //   userCode: this.userCode,
-      //   userPassword: this.userPassword,
-      //   userName: '测试'
-      // };
-      // setTimeout(() => {
-      //   this.loadingStatus = false;
-      //   // 跳转主页
-      //   this.$nextTick(() => {
-      //     this.$router.replace({
-      //       path: '/homePage/welcomPage'
-      //     });
-      //   });
-      // }, 2000);
     },
     closewindow() {
       ipcRenderer.send('close-window');
     },
     minWindow() {
       ipcRenderer.send('min-window');
-    },
-    restrictInput() {
-      // 匹配只包含数字、字母和下划线的正则表达式
-      if (!this.regex.test(this.userCodeReg)) {
-        // 如果输入的值不符合要求，移除非法字符
-        this.userCodeReg = this.userCodeReg.replace(/[^a-zA-Z0-9_]/g, '');
-        this.$message.error('登录账户只能设置为数字，字母及下划线！');
-      }
     },
     checkJavaAppStatus(retries = 0) {
       axios
