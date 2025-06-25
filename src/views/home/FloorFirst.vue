@@ -126,7 +126,7 @@
             <div
               class="log-tab"
               :class="{ active: activeLogType === 'alarm' }"
-              @click="activeLogType = 'alarm'"
+              @click="switchToAlarmLog"
             >
               报警日志
               <div v-if="unreadAlarms > 0" class="alarm-badge">
@@ -708,6 +708,40 @@
             </el-form>
           </div>
         </div>
+
+        <!-- 故障信号测试 -->
+        <div class="test-section">
+          <h3>故障信号测试</h3>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="故障类型">
+                <el-select
+                  v-model="selectedFaultSignal"
+                  placeholder="选择要测试的故障信号"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="fault in faultSignalOptions"
+                    :key="fault.value"
+                    :label="fault.label"
+                    :value="fault.value"
+                  ></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button
+                  type="danger"
+                  size="small"
+                  @click="simulateFaultSignal"
+                  :loading="faultSignalLoading"
+                  :disabled="!selectedFaultSignal"
+                >
+                  触发故障信号
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
       </div>
     </el-dialog>
     <!-- 托盘移动对话框 -->
@@ -1013,7 +1047,11 @@ export default {
         bit6: '0', // 去三楼灌装车间A输送线故障信号
         bit7: '0', // 去三楼灌装车间B输送线故障信号
         bit8: '0', // 去一楼灌装车间A输送线故障信号
-        bit9: '0' // 去一楼灌装车间B输送线故障信号
+        bit9: '0', // 去一楼灌装车间B输送线故障信号
+        bit10: '0', // 1#机器人暂停中信号（AGV送货暂停、门安全暂停）
+        bit11: '0', // 2#机器人暂停中信号（AGV送货暂停、门安全暂停）
+        bit12: '0', // 1#机器人安全门被打开（信号为1时，不能复位停）
+        bit13: '0' // 2#机器人安全门被打开（信号为1时，不能复位停）
       },
       // 1#机器人状态
       robotStatus: {
@@ -1087,7 +1125,37 @@ export default {
       agvTaskDialogVisible: false,
       currentAgvTaskFloor: 'floor1',
       currentAgvTasks: [],
-      agvTasksLoading: false
+      agvTasksLoading: false,
+      // 故障信号测试相关数据
+      selectedFaultSignal: '',
+      faultSignalLoading: false,
+      faultSignalOptions: [
+        { value: 'bit1', label: 'PLC系统故障信号' },
+        { value: 'bit2', label: '1#机器人故障信号' },
+        { value: 'bit3', label: '2#机器人故障信号' },
+        { value: 'bit4', label: '去三楼托盘提升机故障信号' },
+        { value: 'bit5', label: '去一楼托盘提升机故障信号' },
+        { value: 'bit6', label: '去三楼灌装车间A输送线故障信号' },
+        { value: 'bit7', label: '去三楼灌装车间B输送线故障信号' },
+        { value: 'bit8', label: '去一楼灌装车间A输送线故障信号' },
+        { value: 'bit9', label: '去一楼灌装车间B输送线故障信号' },
+        {
+          value: 'bit10',
+          label: '1#机器人暂停中信号（AGV送货暂停、门安全暂停）'
+        },
+        {
+          value: 'bit11',
+          label: '2#机器人暂停中信号（AGV送货暂停、门安全暂停）'
+        },
+        {
+          value: 'bit12',
+          label: '1#机器人安全门被打开（信号为1时，不能复位停）'
+        },
+        {
+          value: 'bit13',
+          label: '2#机器人安全门被打开（信号为1时，不能复位停）'
+        }
+      ]
     };
   },
   computed: {
@@ -1142,6 +1210,10 @@ export default {
       this.conveyorStatus.bit7 = getBit(word2, 15);
       this.conveyorStatus.bit8 = getBit(word2, 0);
       this.conveyorStatus.bit9 = getBit(word2, 1);
+      this.conveyorStatus.bit10 = getBit(word2, 2);
+      this.conveyorStatus.bit11 = getBit(word2, 3);
+      this.conveyorStatus.bit12 = getBit(word2, 4);
+      this.conveyorStatus.bit13 = getBit(word2, 5);
 
       // 1#机器人状态
       let word4 = this.convertToWord(values.DBW4);
@@ -1199,6 +1271,11 @@ export default {
       async handler(newVal) {
         if (newVal === '1') {
           this.addLog(`2800接货处扫码数据：${this.twoEightHundredPalletCode}`);
+          // 检查条码信息是否为NoRead
+          if (this.twoEightHundredPalletCode === 'NoRead') {
+            this.addLog('2800接货处扫码失败：条码信息为NoRead', 'alarm');
+            return;
+          }
           // 自动触发AGV运输任务，从2800到C区缓存位
           this.getTrayInfo(this.twoEightHundredPalletCode);
         }
@@ -1221,6 +1298,110 @@ export default {
           this.addLog('检测到三楼提升机出口有货需AGV接走');
           // 自动触发AGV运输任务，从AGV3-1到C区缓存位
           this.handleAGVToStorage('AGV2-3');
+        }
+      }
+    },
+    // 监听PLC系统故障信号
+    'conveyorStatus.bit1': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('PLC系统故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听1#机器人故障信号
+    'conveyorStatus.bit2': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('1#机器人故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听2#机器人故障信号
+    'conveyorStatus.bit3': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('2#机器人故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听去三楼托盘提升机故障信号
+    'conveyorStatus.bit4': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('去三楼托盘提升机故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听去一楼托盘提升机故障信号
+    'conveyorStatus.bit5': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('去一楼托盘提升机故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听去三楼灌装车间A输送线故障信号
+    'conveyorStatus.bit6': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('去三楼灌装车间A输送线故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听去三楼灌装车间B输送线故障信号
+    'conveyorStatus.bit7': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('去三楼灌装车间B输送线故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听去一楼灌装车间A输送线故障信号
+    'conveyorStatus.bit8': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('去一楼灌装车间A输送线故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听去一楼灌装车间B输送线故障信号
+    'conveyorStatus.bit9': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('去一楼灌装车间B输送线故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听1#机器人暂停中信号（AGV送货暂停、门安全暂停）
+    'conveyorStatus.bit10': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('1#机器人暂停中信号（AGV送货暂停、门安全暂停）', 'alarm');
+        }
+      }
+    },
+    // 监听2#机器人暂停中信号（AGV送货暂停、门安全暂停）
+    'conveyorStatus.bit11': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('2#机器人暂停中信号（AGV送货暂停、门安全暂停）', 'alarm');
+        }
+      }
+    },
+    // 监听1#机器人安全门被打开（信号为1时，不能复位停）
+    'conveyorStatus.bit12': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('1#机器人安全门被打开（信号为1时，不能复位停）', 'alarm');
+        }
+      }
+    },
+    // 监听2#机器人安全门被打开（信号为1时，不能复位停）
+    'conveyorStatus.bit13': {
+      handler(newVal) {
+        if (newVal === '1') {
+          this.addLog('2#机器人安全门被打开（信号为1时，不能复位停）', 'alarm');
         }
       }
     }
@@ -1617,18 +1798,18 @@ export default {
         type,
         message,
         timestamp: moment().format('YYYY-MM-DD HH:mm:ss'),
-        unread: type === 'alarm'
+        unread: type === 'alarm' // 报警日志标记未读，运行日志默认已读
       };
 
       if (type === 'running') {
         this.runningLogs.unshift(log);
         // 保持日志数量在合理范围内
-        if (this.runningLogs.length > 100) {
+        if (this.runningLogs.length > 300) {
           this.runningLogs.pop();
         }
       } else {
         this.alarmLogs.unshift(log);
-        if (this.alarmLogs.length > 100) {
+        if (this.alarmLogs.length > 300) {
           this.alarmLogs.pop();
         }
       }
@@ -2037,11 +2218,13 @@ export default {
               errorMsg = res.message || '未知错误';
           }
           this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          this.addLog(`AGV指令发送失败: ${errorMsg}`, 'alarm');
           return '';
         }
       } catch (err) {
         console.error('发送AGV指令失败:', err);
         this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`, 'alarm');
         return '';
       }
     },
@@ -2611,13 +2794,51 @@ export default {
               errorMsg = res.message || '未知错误';
           }
           this.addLog(`AGV指令发送失败: ${errorMsg}`);
+          this.addLog(`AGV指令发送失败: ${errorMsg}`, 'alarm');
           return '';
         }
       } catch (err) {
         console.error('发送AGV指令失败:', err);
         this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
+        this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`, 'alarm');
         return '';
       }
+    },
+    // 触发故障信号测试
+    simulateFaultSignal() {
+      if (!this.selectedFaultSignal) {
+        this.$message.warning('请选择要测试的故障信号');
+        return;
+      }
+
+      this.faultSignalLoading = true;
+
+      // 获取选中故障信号的描述
+      const faultOption = this.faultSignalOptions.find(
+        (option) => option.value === this.selectedFaultSignal
+      );
+      const faultDescription = faultOption
+        ? faultOption.label
+        : this.selectedFaultSignal;
+
+      // 设置对应的故障信号为1
+      this.conveyorStatus[this.selectedFaultSignal] = '1';
+      this.addLog(`模拟故障信号已触发：${faultDescription}`);
+
+      // 2秒后自动恢复为0
+      setTimeout(() => {
+        this.conveyorStatus[this.selectedFaultSignal] = '0';
+        this.addLog(`模拟故障信号已恢复：${faultDescription}`);
+        this.faultSignalLoading = false;
+      }, 2000);
+    },
+    // 切换到报警日志时清除未读状态
+    switchToAlarmLog() {
+      this.activeLogType = 'alarm';
+      // 清除所有报警日志的未读状态
+      this.alarmLogs.forEach((log) => {
+        log.unread = false;
+      });
     }
   }
 };
