@@ -171,6 +171,16 @@
           <div class="floor-title" style="position: relative">
             <i class="el-icon-monitor"></i> 生产线
             <el-button
+              style="position: absolute; right: 175px"
+              type="success"
+              size="mini"
+              @click="showMobileConnectionStatus"
+              icon="el-icon-connection"
+              :disabled="!wsServerStatus.isRunning"
+            >
+              PDA互联
+            </el-button>
+            <el-button
               style="position: absolute; right: 2px"
               type="primary"
               size="mini"
@@ -909,6 +919,98 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 移动端连接状态对话框 -->
+    <el-dialog
+      title="PDA连接状态"
+      :visible.sync="mobileConnectionDialogVisible"
+      width="1200px"
+      append-to-body
+      custom-class="mobile-connection-dialog"
+    >
+      <div class="connection-status-header">
+        <div class="server-status">
+          <el-tag :type="wsServerStatus.isRunning ? 'success' : 'danger'">
+            WebSocket服务器状态:
+            {{ wsServerStatus.isRunning ? '运行中' : '已停止' }}
+          </el-tag>
+          <span class="server-info">端口: {{ wsServerStatus.port }}</span>
+          <span class="server-info"
+            >2800车间在线客户端: {{ workshop2800ClientCount }}</span
+          >
+        </div>
+        <el-button
+          type="primary"
+          size="small"
+          icon="el-icon-refresh"
+          @click="refreshMobileConnections"
+          :loading="refreshingConnections"
+        >
+          刷新
+        </el-button>
+      </div>
+
+      <el-table
+        :data="mobileConnections"
+        style="width: 100%; margin-top: 16px"
+        :height="400"
+        empty-text="暂无移动端连接"
+      >
+        <el-table-column
+          prop="id"
+          label="客户端ID"
+          width="280"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="workshop"
+          label="车间"
+          width="100"
+          align="center"
+        >
+          <template slot-scope="scope">
+            <el-tag
+              :type="
+                scope.row.workshop === '2800'
+                  ? 'primary'
+                  : scope.row.workshop === '2500'
+                  ? 'success'
+                  : 'info'
+              "
+              size="small"
+            >
+              {{ scope.row.workshop }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="ip" label="IP地址" width="140" />
+        <el-table-column prop="status" label="状态" width="100" align="center">
+          <template slot-scope="scope">
+            <el-tag
+              :type="scope.row.status === '在线' ? 'success' : 'danger'"
+              size="small"
+            >
+              {{ scope.row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="connectedAt" label="连接时间" width="180">
+          <template slot-scope="scope">
+            {{ formatTime(scope.row.connectedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="lastPing" label="最后活跃" width="180">
+          <template slot-scope="scope">
+            {{ formatTime(scope.row.lastPing) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="userAgent"
+          label="设备信息"
+          show-overflow-tooltip
+        />
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -917,6 +1019,7 @@ import HttpUtil from '@/utils/HttpUtil';
 import HttpUtilAGV from '@/utils/HttpUtilAGV';
 import moment from 'moment';
 import { ipcRenderer } from 'electron';
+// import AlarmWebSocketServer from '@/utils/WebSocketServer'; // 移动到主进程
 export default {
   name: 'FloorFirst',
   props: {
@@ -1155,7 +1258,17 @@ export default {
           value: 'bit13',
           label: '2#机器人安全门被打开（信号为1时，不能复位停）'
         }
-      ]
+      ],
+      // WebSocket相关数据
+      wsServer: null,
+      wsServerStatus: {
+        isRunning: false,
+        port: 8081,
+        clientCount: 0
+      },
+      mobileConnectionDialogVisible: false,
+      mobileConnections: [],
+      refreshingConnections: false
     };
   },
   computed: {
@@ -1189,11 +1302,16 @@ export default {
     },
     unreadAlarms() {
       return this.alarmLogs.filter((log) => log.unread).length;
+    },
+    // 2800车间的客户端数量
+    workshop2800ClientCount() {
+      return this.mobileConnections.length;
     }
   },
   mounted() {
     this.initializeMarkers();
     this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
+    this.initWebSocketServer(); // 初始化WebSocket服务器
     ipcRenderer.on('receivedMsg', (event, values, values2) => {
       // 使用位运算优化赋值
       const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
@@ -1812,6 +1930,9 @@ export default {
         if (this.alarmLogs.length > 300) {
           this.alarmLogs.pop();
         }
+
+        // 如果是报警日志，推送到移动端（2800车间）
+        this.pushAlarmToMobile(log);
       }
     },
     updateSchedulePlan(index) {
@@ -2839,6 +2960,77 @@ export default {
       this.alarmLogs.forEach((log) => {
         log.unread = false;
       });
+    },
+
+    // ============ WebSocket相关方法 ============
+    // 初始化WebSocket连接（项目启动时WebSocket服务器已自动启动）
+    initWebSocketServer() {
+      try {
+        // 监听服务器状态更新
+        ipcRenderer.on('websocket-status-update', (event, status) => {
+          this.wsServerStatus = status;
+        });
+
+        // 立即获取一次状态
+        ipcRenderer.send('get-websocket-status');
+
+        // 定期请求服务器状态
+        setInterval(() => {
+          ipcRenderer.send('get-websocket-status');
+        }, 5000);
+
+        this.addLog('已连接到WebSocket服务器', 'running');
+      } catch (error) {
+        console.error('WebSocket连接失败:', error);
+        this.addLog(`WebSocket连接失败: ${error.message}`, 'alarm');
+      }
+    },
+
+    // updateWsServerStatus方法已移除，状态通过IPC获取
+
+    // 推送报警到移动端（通过IPC）
+    pushAlarmToMobile(logData) {
+      const alarmData = {
+        id: logData.id,
+        message: logData.message,
+        timestamp: logData.timestamp,
+        type: logData.type,
+        source: '2800车间',
+        unread: true
+      };
+
+      // 发送IPC消息到主进程，请求推送报警
+      ipcRenderer.send('push-alarm-to-workshop', '2800', alarmData);
+      console.log('报警推送请求已发送到主进程');
+    },
+
+    // 显示移动端连接状态
+    showMobileConnectionStatus() {
+      this.mobileConnectionDialogVisible = true;
+      this.refreshMobileConnections();
+    },
+
+    // 刷新移动端连接状态（通过IPC）
+    refreshMobileConnections() {
+      this.refreshingConnections = true;
+
+      // 发送IPC消息到主进程，请求获取连接的客户端
+      ipcRenderer.send('get-websocket-clients');
+
+      // 监听客户端列表响应
+      ipcRenderer.once('websocket-clients-list', (event, clients) => {
+        // 只显示2800车间的连接
+        this.mobileConnections = (clients || []).filter(
+          (client) => client.workshop === '2800'
+        );
+        this.refreshingConnections = false;
+      });
+    },
+
+    // 格式化时间
+    formatTime(timeValue) {
+      if (!timeValue) return '--';
+      return moment(timeValue).format('YYYY-MM-DD HH:mm:ss');
     }
   }
 };
@@ -4078,5 +4270,34 @@ export default {
   color: #f56c6c;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* 移动端连接状态对话框样式 */
+:deep(.mobile-connection-dialog) {
+  .connection-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f5f7fa;
+    border-radius: 6px;
+    border: 1px solid #e4e7ed;
+  }
+
+  .server-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .server-info {
+    color: #606266;
+    font-size: 14px;
+    padding: 4px 8px;
+    background: #fff;
+    border-radius: 4px;
+    border: 1px solid #dcdfe6;
+  }
 }
 </style>

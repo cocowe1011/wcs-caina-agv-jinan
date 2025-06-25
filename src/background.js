@@ -12,6 +12,7 @@ import { createProtocol } from 'vue-cli-plugin-electron-builder/lib';
 import nodes7 from 'nodes7';
 import HttpUtil from '@/utils/HttpUtil';
 import logger from 'electron-log';
+import AlarmWebSocketServer from './utils/WebSocketServer';
 // 设置日志文件的保存路径
 logger.transports.file.file = app.getPath('userData') + '/app.log';
 
@@ -30,6 +31,9 @@ const fs = require('fs');
 var appTray = null;
 let closeStatus = false;
 var conn = new nodes7();
+
+// WebSocket服务器实例
+let alarmWebSocketServer = null;
 
 // 记录日志的辅助函数
 function logToFile(message) {
@@ -71,6 +75,14 @@ app.on('ready', () => {
     },
     icon: './build/icons/icon.ico'
   });
+
+  // 项目启动时自动启动WebSocket服务器
+  try {
+    alarmWebSocketServer = new AlarmWebSocketServer(8081);
+    logger.info('WebSocket服务器自动启动成功，端口: 8081');
+  } catch (error) {
+    logger.error('WebSocket服务器自动启动失败:', error);
+  }
   if (process.env.WEBPACK_DEV_SERVER_URL) {
     // Load the url of the dev server if in development mode
     mainWindow.loadURL(process.env.WEBPACK_DEV_SERVER_URL);
@@ -111,6 +123,36 @@ app.on('ready', () => {
   // writeValuesToPLC
   ipcMain.on('writeValuesToPLC', (event, arg1, arg2) => {
     writeValuesToPLC(arg1, arg2);
+  });
+
+  // ============ WebSocket服务器IPC处理 ============
+
+  // 获取WebSocket服务器状态
+  ipcMain.on('get-websocket-status', (event) => {
+    if (alarmWebSocketServer) {
+      event.reply('websocket-status-update', alarmWebSocketServer.getStatus());
+    }
+  });
+
+  // 推送报警到指定车间
+  ipcMain.on('push-alarm-to-workshop', (event, workshop, alarmData) => {
+    if (alarmWebSocketServer) {
+      const success = alarmWebSocketServer.pushAlarmToWorkshop(
+        workshop,
+        alarmData
+      );
+      logger.info(`推送${workshop}车间报警: ${success ? '成功' : '失败'}`);
+    }
+  });
+
+  // 获取连接的客户端列表
+  ipcMain.on('get-websocket-clients', (event) => {
+    if (alarmWebSocketServer) {
+      const clients = alarmWebSocketServer.getConnectedClients();
+      event.reply('websocket-clients-list', clients);
+    } else {
+      event.reply('websocket-clients-list', []);
+    }
   });
   // 定义自定义事件
   ipcMain.on('max-window', (event, arg) => {
