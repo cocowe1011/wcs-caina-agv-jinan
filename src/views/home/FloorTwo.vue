@@ -83,7 +83,7 @@
             <div
               class="log-tab"
               :class="{ active: activeLogType === 'alarm' }"
-              @click="activeLogType = 'alarm'"
+              @click="switchToAlarmLog"
             >
               报警日志
               <div v-if="unreadAlarms > 0" class="alarm-badge">
@@ -895,6 +895,11 @@ export default {
       async handler(newVal) {
         if (newVal === '1') {
           this.addLog(`2500接货处扫码数据：${this.twoFiveHundredPalletCode}`);
+          // 检查条码信息是否为NoRead
+          if (this.twoFiveHundredPalletCode === 'NoRead') {
+            this.addLog('2500接货处扫码失败：条码信息为NoRead', 'alarm');
+            return;
+          }
           // 自动触发AGV运输任务，从2800到C区缓存位
           this.getTrayInfo(this.twoFiveHundredPalletCode);
         }
@@ -2225,6 +2230,15 @@ export default {
     formatTime(timeValue) {
       if (!timeValue) return '--';
       return moment(timeValue).format('YYYY-MM-DD HH:mm:ss');
+    },
+
+    // 切换到报警日志时清除未读状态
+    switchToAlarmLog() {
+      this.activeLogType = 'alarm';
+      // 清除所有报警日志的未读状态
+      this.alarmLogs.forEach((log) => {
+        log.unread = false;
+      });
     }
   }
 };
