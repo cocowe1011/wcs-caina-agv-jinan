@@ -390,6 +390,85 @@
                 </div>
               </div>
               <!-- 机械臂 -->
+              <!-- 三楼流动箭头 -->
+              <div
+                v-for="(arrow, index) in thirdFloorArrows"
+                :key="'third-floor-' + index"
+                v-show="conveyorStatus.bit14 === '1'"
+                class="marker-with-flow flow-item"
+                :data-x="arrow.x"
+                :data-y="arrow.y"
+                :style="{
+                  width: arrow.width + 'px',
+                  transform: `translate(-50%, -50%) scale(0.5) rotateZ(${arrow.rotation}deg)`
+                }"
+              >
+                <div
+                  v-for="item in arrow.arrowCount"
+                  :key="item"
+                  class="arrow-item"
+                ></div>
+              </div>
+
+              <!-- 一楼流动箭头 -->
+              <div
+                v-for="(arrow, index) in firstFloorArrows"
+                :key="'first-floor-' + index"
+                v-show="conveyorStatus.bit15 === '1'"
+                class="marker-with-flow flow-item"
+                :data-x="arrow.x"
+                :data-y="arrow.y"
+                :style="{
+                  width: arrow.width + 'px',
+                  transform: `translate(-50%, -50%) scale(0.5) rotateZ(${arrow.rotation}deg)`
+                }"
+              >
+                <div
+                  v-for="item in arrow.arrowCount"
+                  :key="item"
+                  class="arrow-item-first-floor"
+                ></div>
+              </div>
+
+              <!-- 1#机器人状态指示灯 -->
+              <div class="robot-status-indicators" data-x="1050" data-y="530">
+                <div
+                  class="robot-indicator"
+                  @click="toggleRobotIndicator('robot1')"
+                >
+                  <div
+                    class="status-light"
+                    :class="{
+                      'light-green': conveyorStatus.bit14 === '1',
+                      'light-yellow-flash': conveyorStatus.bit10 === '1',
+                      'light-off':
+                        conveyorStatus.bit14 === '0' &&
+                        conveyorStatus.bit10 === '0'
+                    }"
+                  ></div>
+                  <span class="robot-label">1#机器人</span>
+                </div>
+              </div>
+
+              <!-- 2#机器人状态指示灯 -->
+              <div class="robot-status-indicators" data-x="1050" data-y="980">
+                <div
+                  class="robot-indicator"
+                  @click="toggleRobotIndicator('robot2')"
+                >
+                  <div
+                    class="status-light"
+                    :class="{
+                      'light-green': conveyorStatus.bit15 === '1',
+                      'light-yellow-flash': conveyorStatus.bit11 === '1',
+                      'light-off':
+                        conveyorStatus.bit15 === '0' &&
+                        conveyorStatus.bit11 === '0'
+                    }"
+                  ></div>
+                  <span class="robot-label">2#机器人</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1030,6 +1109,24 @@ export default {
   },
   data() {
     return {
+      // 三楼流动箭头配置
+      thirdFloorArrows: [
+        { x: 1065, y: 457, width: 230, rotation: 180, arrowCount: 7 }, // 三楼A
+        { x: 822, y: 635, width: 180, rotation: 95, arrowCount: 6 }, // 三楼A
+        { x: 1565, y: 575, width: 180, rotation: 0, arrowCount: 6 }, // 三楼B
+        { x: 2430, y: 606, width: 280, rotation: 0, arrowCount: 8 }, // 三楼B
+        { x: 2790, y: 777, width: 60, rotation: 5, arrowCount: 4 }, // 三楼B
+        { x: 2707, y: 685, width: 70, rotation: 85, arrowCount: 4 } // 三楼B
+      ],
+      // 一楼流动箭头配置
+      firstFloorArrows: [
+        { x: 1050, y: 1053, width: 220, rotation: 180, arrowCount: 7 }, // 一楼A
+        { x: 800, y: 990, width: 100, rotation: 225, arrowCount: 4 }, // 一楼A
+        { x: 2050, y: 658, width: 550, rotation: 0, arrowCount: 15 }, // 一楼B
+        { x: 1453, y: 841, width: 130, rotation: 270, arrowCount: 5 }, // 一楼B
+        { x: 2653, y: 790, width: 90, rotation: 90, arrowCount: 4 }, // 一楼B
+        { x: 2780, y: 926, width: 60, rotation: 0, arrowCount: 3 } // 一楼B
+      ],
       pollingTimerCtoAGV: null, // 定时器ID，用于C区到AGV2-2和AGV2-3的托盘移动轮询
       currentStorageTitle: '', // 新增：用于抽屉标题
       visibleArmPanels: [], // 当前显示的机械臂面板ID列表
@@ -1154,7 +1251,9 @@ export default {
         bit10: '0', // 1#机器人暂停中信号（AGV送货暂停、门安全暂停）
         bit11: '0', // 2#机器人暂停中信号（AGV送货暂停、门安全暂停）
         bit12: '0', // 1#机器人安全门被打开（信号为1时，不能复位停）
-        bit13: '0' // 2#机器人安全门被打开（信号为1时，不能复位停）
+        bit13: '0', // 2#机器人安全门被打开（信号为1时，不能复位停）
+        bit14: '0', // 1#拆垛线启动中
+        bit15: '0' // 2#拆垛线启动中
       },
       // 1#机器人状态
       robotStatus: {
@@ -1241,23 +1340,7 @@ export default {
         { value: 'bit6', label: '去三楼灌装车间A输送线故障信号' },
         { value: 'bit7', label: '去三楼灌装车间B输送线故障信号' },
         { value: 'bit8', label: '去一楼灌装车间A输送线故障信号' },
-        { value: 'bit9', label: '去一楼灌装车间B输送线故障信号' },
-        {
-          value: 'bit10',
-          label: '1#机器人暂停中信号（AGV送货暂停、门安全暂停）'
-        },
-        {
-          value: 'bit11',
-          label: '2#机器人暂停中信号（AGV送货暂停、门安全暂停）'
-        },
-        {
-          value: 'bit12',
-          label: '1#机器人安全门被打开（信号为1时，不能复位停）'
-        },
-        {
-          value: 'bit13',
-          label: '2#机器人安全门被打开（信号为1时，不能复位停）'
-        }
+        { value: 'bit9', label: '去一楼灌装车间B输送线故障信号' }
       ],
       // WebSocket相关数据
       wsServer: null,
@@ -1312,69 +1395,71 @@ export default {
     this.initializeMarkers();
     this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
     this.initWebSocketServer(); // 初始化WebSocket服务器
-    ipcRenderer.on('receivedMsg', (event, values, values2) => {
-      // 使用位运算优化赋值
-      const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
+    //   // 使用位运算优化赋值
+    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
 
-      // 输送线当前运行状态
-      let word2 = this.convertToWord(values.DBW2);
-      this.conveyorStatus.bit0 = getBit(word2, 8);
-      this.conveyorStatus.bit1 = getBit(word2, 9);
-      this.conveyorStatus.bit2 = getBit(word2, 10);
-      this.conveyorStatus.bit3 = getBit(word2, 11);
-      this.conveyorStatus.bit4 = getBit(word2, 12);
-      this.conveyorStatus.bit5 = getBit(word2, 13);
-      this.conveyorStatus.bit6 = getBit(word2, 14);
-      this.conveyorStatus.bit7 = getBit(word2, 15);
-      this.conveyorStatus.bit8 = getBit(word2, 0);
-      this.conveyorStatus.bit9 = getBit(word2, 1);
-      this.conveyorStatus.bit10 = getBit(word2, 2);
-      this.conveyorStatus.bit11 = getBit(word2, 3);
-      this.conveyorStatus.bit12 = getBit(word2, 4);
-      this.conveyorStatus.bit13 = getBit(word2, 5);
+    //   // 输送线当前运行状态
+    //   let word2 = this.convertToWord(values.DBW2);
+    //   this.conveyorStatus.bit0 = getBit(word2, 8);
+    //   this.conveyorStatus.bit1 = getBit(word2, 9);
+    //   this.conveyorStatus.bit2 = getBit(word2, 10);
+    //   this.conveyorStatus.bit3 = getBit(word2, 11);
+    //   this.conveyorStatus.bit4 = getBit(word2, 12);
+    //   this.conveyorStatus.bit5 = getBit(word2, 13);
+    //   this.conveyorStatus.bit6 = getBit(word2, 14);
+    //   this.conveyorStatus.bit7 = getBit(word2, 15);
+    //   this.conveyorStatus.bit8 = getBit(word2, 0);
+    //   this.conveyorStatus.bit9 = getBit(word2, 1);
+    //   this.conveyorStatus.bit10 = getBit(word2, 2);
+    //   this.conveyorStatus.bit11 = getBit(word2, 3);
+    //   this.conveyorStatus.bit12 = getBit(word2, 4);
+    //   this.conveyorStatus.bit13 = getBit(word2, 5);
+    //   this.conveyorStatus.bit14 = getBit(word2, 6);
+    //   this.conveyorStatus.bit15 = getBit(word2, 7);
 
-      // 1#机器人状态
-      let word4 = this.convertToWord(values.DBW4);
-      this.robotStatus.bit0 = getBit(word4, 8);
-      this.robotStatus.bit1 = getBit(word4, 9);
-      this.robotStatus.bit2 = getBit(word4, 10);
-      this.robotStatus.bit3 = getBit(word4, 11);
-      this.robotStatus.bit4 = getBit(word4, 12);
-      this.robotStatus.bit5 = getBit(word4, 13);
-      this.robotStatus.bit6 = getBit(word4, 14);
-      this.robotStatus.bit7 = getBit(word4, 15);
-      this.robotStatus.bit8 = getBit(word4, 0);
-      this.robotStatus.bit9 = getBit(word4, 1);
-      this.robotStatus.bit10 = getBit(word4, 2);
-      this.robotStatus.bit11 = getBit(word4, 3);
+    //   // 1#机器人状态
+    //   let word4 = this.convertToWord(values.DBW4);
+    //   this.robotStatus.bit0 = getBit(word4, 8);
+    //   this.robotStatus.bit1 = getBit(word4, 9);
+    //   this.robotStatus.bit2 = getBit(word4, 10);
+    //   this.robotStatus.bit3 = getBit(word4, 11);
+    //   this.robotStatus.bit4 = getBit(word4, 12);
+    //   this.robotStatus.bit5 = getBit(word4, 13);
+    //   this.robotStatus.bit6 = getBit(word4, 14);
+    //   this.robotStatus.bit7 = getBit(word4, 15);
+    //   this.robotStatus.bit8 = getBit(word4, 0);
+    //   this.robotStatus.bit9 = getBit(word4, 1);
+    //   this.robotStatus.bit10 = getBit(word4, 2);
+    //   this.robotStatus.bit11 = getBit(word4, 3);
 
-      // 2#机器人状态
-      let word6 = this.convertToWord(values.DBW6);
-      this.robotStatus2.bit0 = getBit(word6, 8);
-      this.robotStatus2.bit1 = getBit(word6, 9);
-      this.robotStatus2.bit2 = getBit(word6, 10);
-      this.robotStatus2.bit3 = getBit(word6, 11);
-      this.robotStatus2.bit4 = getBit(word6, 12);
-      this.robotStatus2.bit5 = getBit(word6, 13);
-      this.robotStatus2.bit6 = getBit(word6, 14);
-      this.robotStatus2.bit7 = getBit(word6, 15);
-      this.robotStatus2.bit8 = getBit(word6, 0);
-      this.robotStatus2.bit9 = getBit(word6, 1);
-      this.robotStatus2.bit10 = getBit(word6, 2);
-      this.robotStatus2.bit11 = getBit(word6, 3);
+    //   // 2#机器人状态
+    //   let word6 = this.convertToWord(values.DBW6);
+    //   this.robotStatus2.bit0 = getBit(word6, 8);
+    //   this.robotStatus2.bit1 = getBit(word6, 9);
+    //   this.robotStatus2.bit2 = getBit(word6, 10);
+    //   this.robotStatus2.bit3 = getBit(word6, 11);
+    //   this.robotStatus2.bit4 = getBit(word6, 12);
+    //   this.robotStatus2.bit5 = getBit(word6, 13);
+    //   this.robotStatus2.bit6 = getBit(word6, 14);
+    //   this.robotStatus2.bit7 = getBit(word6, 15);
+    //   this.robotStatus2.bit8 = getBit(word6, 0);
+    //   this.robotStatus2.bit9 = getBit(word6, 1);
+    //   this.robotStatus2.bit10 = getBit(word6, 2);
+    //   this.robotStatus2.bit11 = getBit(word6, 3);
 
-      // AGV调度条件
-      let word8 = this.convertToWord(values.DBW8);
-      this.agvScheduleCondition.bit0 = getBit(word8, 8);
-      this.agvScheduleCondition.bit1 = getBit(word8, 9);
-      this.agvScheduleCondition.bit2 = getBit(word8, 10);
-      this.agvScheduleCondition.bit3 = getBit(word8, 11);
-      this.agvScheduleCondition.bit4 = getBit(word8, 12);
-      this.agvScheduleCondition.bit5 = getBit(word8, 13);
+    //   // AGV调度条件
+    //   let word8 = this.convertToWord(values.DBW8);
+    //   this.agvScheduleCondition.bit0 = getBit(word8, 8);
+    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
+    //   this.agvScheduleCondition.bit2 = getBit(word8, 10);
+    //   this.agvScheduleCondition.bit3 = getBit(word8, 11);
+    //   this.agvScheduleCondition.bit4 = getBit(word8, 12);
+    //   this.agvScheduleCondition.bit5 = getBit(word8, 13);
 
-      // 2800接货处条码
-      this.twoEightHundredPalletCode = values.DBB10 ?? '';
-    });
+    //   // 2800接货处条码
+    //   this.twoEightHundredPalletCode = values.DBB10 ?? '';
+    // });
   },
   watch: {
     isActive(newVal) {
@@ -1488,38 +1573,6 @@ export default {
       handler(newVal) {
         if (newVal === '1') {
           this.addLog('去一楼灌装车间B输送线故障信号', 'alarm');
-        }
-      }
-    },
-    // 监听1#机器人暂停中信号（AGV送货暂停、门安全暂停）
-    'conveyorStatus.bit10': {
-      handler(newVal) {
-        if (newVal === '1') {
-          this.addLog('1#机器人暂停中信号（AGV送货暂停、门安全暂停）', 'alarm');
-        }
-      }
-    },
-    // 监听2#机器人暂停中信号（AGV送货暂停、门安全暂停）
-    'conveyorStatus.bit11': {
-      handler(newVal) {
-        if (newVal === '1') {
-          this.addLog('2#机器人暂停中信号（AGV送货暂停、门安全暂停）', 'alarm');
-        }
-      }
-    },
-    // 监听1#机器人安全门被打开（信号为1时，不能复位停）
-    'conveyorStatus.bit12': {
-      handler(newVal) {
-        if (newVal === '1') {
-          this.addLog('1#机器人安全门被打开（信号为1时，不能复位停）', 'alarm');
-        }
-      }
-    },
-    // 监听2#机器人安全门被打开（信号为1时，不能复位停）
-    'conveyorStatus.bit13': {
-      handler(newVal) {
-        if (newVal === '1') {
-          this.addLog('2#机器人安全门被打开（信号为1时，不能复位停）', 'alarm');
         }
       }
     }
@@ -1645,7 +1698,7 @@ export default {
         }
 
         const markers = imageWrapper.querySelectorAll(
-          '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button'
+          '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button, .marker-with-flow, .robot-status-indicators'
         );
         const wrapperRect = imageWrapper.getBoundingClientRect();
 
@@ -3031,6 +3084,53 @@ export default {
     formatTime(timeValue) {
       if (!timeValue) return '--';
       return moment(timeValue).format('YYYY-MM-DD HH:mm:ss');
+    },
+
+    // 切换机器人指示灯状态（三种状态循环切换）
+    toggleRobotIndicator(robotId) {
+      if (robotId === 'robot1') {
+        // 当前状态：停止 -> 启动 -> 暂停 -> 停止
+        if (
+          this.conveyorStatus.bit14 === '0' &&
+          this.conveyorStatus.bit10 === '0'
+        ) {
+          // 停止状态 -> 启动中
+          this.conveyorStatus.bit14 = '1';
+          this.conveyorStatus.bit10 = '0';
+          this.addLog('1#机器人状态切换为：启动中');
+        } else if (this.conveyorStatus.bit14 === '1') {
+          // 启动中 -> 暂停中
+          this.conveyorStatus.bit14 = '0';
+          this.conveyorStatus.bit10 = '1';
+          this.addLog('1#机器人状态切换为：暂停中');
+        } else if (this.conveyorStatus.bit10 === '1') {
+          // 暂停中 -> 停止
+          this.conveyorStatus.bit14 = '0';
+          this.conveyorStatus.bit10 = '0';
+          this.addLog('1#机器人状态切换为：已停止');
+        }
+      } else if (robotId === 'robot2') {
+        // 当前状态：停止 -> 启动 -> 暂停 -> 停止
+        if (
+          this.conveyorStatus.bit15 === '0' &&
+          this.conveyorStatus.bit11 === '0'
+        ) {
+          // 停止状态 -> 启动中
+          this.conveyorStatus.bit15 = '1';
+          this.conveyorStatus.bit11 = '0';
+          this.addLog('2#机器人状态切换为：启动中');
+        } else if (this.conveyorStatus.bit15 === '1') {
+          // 启动中 -> 暂停中
+          this.conveyorStatus.bit15 = '0';
+          this.conveyorStatus.bit11 = '1';
+          this.addLog('2#机器人状态切换为：暂停中');
+        } else if (this.conveyorStatus.bit11 === '1') {
+          // 暂停中 -> 停止
+          this.conveyorStatus.bit15 = '0';
+          this.conveyorStatus.bit11 = '0';
+          this.addLog('2#机器人状态切换为：已停止');
+        }
+      }
     }
   }
 };
@@ -3444,10 +3544,11 @@ export default {
               }
             }
             .marker-with-panel,
-            .marker-with-panel-machine {
+            .marker-with-panel-machine,
+            .marker-with-flow {
               position: absolute;
               transform: translate(-50%, -50%);
-              z-index: 2;
+              z-index: 1;
               display: flex;
               align-items: center;
               justify-content: center;
@@ -4127,6 +4228,181 @@ export default {
   .target-pallet-list::-webkit-scrollbar-thumb:hover {
     background: rgba(64, 158, 255, 0.5);
   }
+}
+
+/* 流动箭头样式 - 从index.vue index.less完整复制 */
+.arrow-item {
+  position: relative;
+  display: inline-block;
+  width: 45px;
+  height: 34px;
+}
+.arrow-item::before {
+  content: '';
+  display: inline-block;
+  position: relative;
+  width: 20px;
+  height: 16px;
+  background-color: #1dbb50;
+}
+.arrow-item::after {
+  content: '';
+  position: relative;
+  top: 4px;
+  right: 12px;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-right: 24px solid #1dbb50;
+  border-bottom: 24px solid transparent;
+  transform: rotate(45deg);
+}
+
+/* 一楼箭头样式 - 使用动感蓝色 */
+.arrow-item-first-floor {
+  position: relative;
+  display: inline-block;
+  width: 45px;
+  height: 34px;
+}
+.arrow-item-first-floor::before {
+  content: '';
+  display: inline-block;
+  position: relative;
+  width: 20px;
+  height: 16px;
+  background-color: #2a57fb;
+}
+.arrow-item-first-floor::after {
+  content: '';
+  position: relative;
+  top: 4px;
+  right: 12px;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-right: 24px solid #2a57fb;
+  border-bottom: 24px solid transparent;
+  transform: rotate(45deg);
+}
+
+.flow-item {
+  height: 34px;
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  transform: translateZ(0); /* 启用硬件加速 */
+  backface-visibility: hidden; /* 防止闪烁 */
+  .arrow-item {
+    position: relative;
+    animation: carousel 1s linear infinite;
+    will-change: transform;
+  }
+  .arrow-item-first-floor {
+    position: relative;
+    animation: carousel 1s linear infinite;
+    will-change: transform;
+  }
+}
+
+@keyframes carousel {
+  0% {
+    transform: translateX(-45px) translateZ(0);
+  }
+  100% {
+    transform: translateX(0px) translateZ(0);
+  }
+}
+
+/* 机器人状态指示灯样式 */
+.robot-status-indicators {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+
+.robot-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 42, 56, 0.9);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.status-light {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: relative;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+/* 绿灯 - 启动中 */
+.status-light.light-green {
+  background: radial-gradient(circle at 30% 30%, #4ade80, #16a34a);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6), 0 0 16px rgba(34, 197, 94, 0.3),
+    inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.status-light.light-green::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+}
+
+/* 黄灯闪烁 - 暂停中 */
+.status-light.light-yellow-flash {
+  background: radial-gradient(circle at 30% 30%, #fbbf24, #f59e0b);
+  animation: yellowFlash 1.5s infinite;
+}
+
+.status-light.light-yellow-flash::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+}
+
+@keyframes yellowFlash {
+  0%,
+  50% {
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.8),
+      0 0 16px rgba(251, 191, 36, 0.4), inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+  }
+  25%,
+  75% {
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.4), 0 0 8px rgba(251, 191, 36, 0.2),
+      inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    opacity: 0.4;
+  }
+}
+
+/* 灯灭 - 停止状态 */
+.status-light.light-off {
+  background: radial-gradient(circle at 30% 30%, #6b7280, #4b5563);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.robot-label {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .agv-task-dialog {
