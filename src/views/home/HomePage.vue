@@ -70,7 +70,10 @@
                 v-if="userRole !== 'ADMIN'"
                 >修改密码</el-dropdown-item
               >
-              <el-dropdown-item icon="el-icon-upload2" command="logout"
+              <el-dropdown-item
+                icon="el-icon-upload2"
+                command="logout"
+                v-if="userRole === 'ADMIN'"
                 >退出登录</el-dropdown-item
               >
             </el-dropdown-menu>
@@ -93,7 +96,11 @@
             style="font-size: 18px; font-weight: 600"
           ></i>
         </div>
-        <div class="maskDiv-top-close" @click="closewindow">
+        <div
+          class="maskDiv-top-close"
+          @click="closewindow"
+          v-if="userRole === 'ADMIN'"
+        >
           <i
             class="el-icon-close"
             style="font-size: 18px; font-weight: 600"
@@ -208,6 +215,11 @@ export default {
       }
     },
     closewindow() {
+      // 检查用户权限，只有管理员可以关闭系统
+      if (this.userRole !== 'ADMIN') {
+        this.$message.warning('操作员权限不足，无法关闭系统！');
+        return;
+      }
       ipcRenderer.send('close-window');
     },
     minWindow() {
@@ -234,6 +246,11 @@ export default {
     handelCommand(command) {
       switch (command) {
         case 'logout':
+          // 检查用户权限，只有管理员可以退出登录
+          if (this.userRole !== 'ADMIN') {
+            this.$message.warning('操作员权限不足，无法退出登录！');
+            return;
+          }
           this.$notify({
             title: '已退出登录！',
             message: '退出登录！',
@@ -349,15 +366,12 @@ export default {
 .homePage {
   width: 100%;
   height: 100%;
-  background: url(./img/background.png) no-repeat;
-  background-size: 100% 100%;
+  background: linear-gradient(135deg, #e3e9f3 0%, #eef2f7 50%, #f5f7fa 100%);
   .maskDiv {
     width: 100%;
     height: 100%;
     opacity: 1;
-    background: rgba(246, 247, 251, 0.6);
-    box-shadow: 0px 60px 90px 0px rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(60px);
+    background: transparent;
     &-top {
       height: 55px;
       width: 100%;

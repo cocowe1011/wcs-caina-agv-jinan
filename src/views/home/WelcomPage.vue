@@ -42,9 +42,10 @@ export default {
     opacity: 1;
     border-radius: 20px;
     background: rgb(255, 255, 255);
-    box-shadow: 0px 60px 90px 0px rgba(0, 0, 0, 0.2);
+    box-shadow: 0px 2px 8px 0px rgba(0, 0, 0, 0.15);
     background-image: url(./img/welcome.jpg);
-    background-size: 100% 100%;
+    background-size: cover;
+    background-position: center;
     background-repeat: no-repeat;
     .center {
       letter-spacing: 3px;

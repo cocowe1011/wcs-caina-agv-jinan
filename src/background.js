@@ -46,6 +46,80 @@ function logToFile(message) {
     if (err) console.error('Error writing to log file:', err);
   });
 }
+
+// 日志缓冲相关变量
+let logBuffer = [];
+let logBufferTimer = null;
+const LOG_BUFFER_SIZE = 10; // 缓冲区大小
+const LOG_FLUSH_INTERVAL = 5000; // 5秒刷新一次
+
+// 优化的日志写入函数
+function writeLogToLocalOptimized(logData) {
+  // 添加时间戳
+  const timestamp = new Date().toLocaleString();
+  const logEntry = `[${timestamp}] ${logData}\n`;
+
+  // 添加到缓冲区
+  logBuffer.push(logEntry);
+
+  // 如果缓冲区满了，立即刷新
+  if (logBuffer.length >= LOG_BUFFER_SIZE) {
+    flushLogBuffer();
+  } else if (!logBufferTimer) {
+    // 设置定时器，定期刷新缓冲区
+    logBufferTimer = setTimeout(() => {
+      flushLogBuffer();
+    }, LOG_FLUSH_INTERVAL);
+  }
+}
+
+// 刷新日志缓冲区
+function flushLogBuffer() {
+  if (logBuffer.length === 0) return;
+
+  const logPath =
+    'D://wcs_temp_data/log/' +
+    (new Date().toLocaleDateString() + '.txt').replaceAll('/', '-');
+
+  // 确保日志目录存在
+  const logDir = 'D://wcs_temp_data/log';
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+
+  // 检查日志文件大小，如果超过10MB则进行轮转
+  try {
+    if (fs.existsSync(logPath)) {
+      const stats = fs.statSync(logPath);
+      const fileSizeInMB = stats.size / (1024 * 1024);
+      if (fileSizeInMB > 10) {
+        // 创建备份文件
+        const backupPath = logPath.replace('.txt', `_${Date.now()}.txt`);
+        fs.renameSync(logPath, backupPath);
+        console.log(`日志文件过大，已轮转到: ${backupPath}`);
+      }
+    }
+  } catch (error) {
+    console.error('检查日志文件大小时出错:', error);
+  }
+
+  // 批量写入日志
+  const logContent = logBuffer.join('');
+  fs.appendFile(logPath, logContent, (err) => {
+    if (err) {
+      console.error('Error writing to log file:', err);
+    }
+  });
+
+  // 清空缓冲区
+  logBuffer = [];
+
+  // 清除定时器
+  if (logBufferTimer) {
+    clearTimeout(logBufferTimer);
+    logBufferTimer = null;
+  }
+}
 // electron 开启热更新
 try {
   require('electron-reloader')(module, {});
@@ -55,6 +129,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// 应用退出时确保所有日志都被写入
+app.on('before-quit', () => {
+  flushLogBuffer();
 });
 
 global.sharedObject = {
@@ -334,14 +413,9 @@ app.on('ready', () => {
       ? mainWindow.setFullScreen(false)
       : mainWindow.setFullScreen(true);
   });
-  // 定义自定义事件
+  // 定义自定义事件 - 优化后的日志写入
   ipcMain.on('writeLogToLocal', (event, arg) => {
-    fs.appendFile(
-      'D://wcs_temp_data/log/' +
-        (new Date().toLocaleDateString() + '.txt').replaceAll('/', '-'),
-      arg + '\n',
-      function (err) {}
-    );
+    writeLogToLocalOptimized(arg);
   });
 });
 

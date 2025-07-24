@@ -469,6 +469,56 @@
                   <span class="robot-label">2#机器人</span>
                 </div>
               </div>
+
+              <!-- 拆垛线控制按钮 -->
+              <div class="control-button-group" data-x="50" data-y="1400">
+                <div class="control-panel-title">
+                  <i class="el-icon-share" style="margin-right: 5px"></i
+                  >拆垛线控制操作
+                </div>
+                <el-button
+                  type="success"
+                  size="mini"
+                  @mousedown="controlLinePress(1, 'start')"
+                  @mouseup="controlLineRelease(1, 'start')"
+                  >1# 拆垛线启动</el-button
+                >
+                <el-button
+                  type="success"
+                  size="mini"
+                  @mousedown="controlLinePress(2, 'start')"
+                  @mouseup="controlLineRelease(2, 'start')"
+                  >2# 拆垛线启动</el-button
+                >
+                <el-button
+                  type="danger"
+                  size="mini"
+                  @mousedown="controlLinePress(1, 'stop')"
+                  @mouseup="controlLineRelease(1, 'stop')"
+                  >1# 拆垛线停止</el-button
+                >
+                <el-button
+                  type="danger"
+                  size="mini"
+                  @mousedown="controlLinePress(2, 'stop')"
+                  @mouseup="controlLineRelease(2, 'stop')"
+                  >2# 拆垛线停止</el-button
+                >
+                <el-button
+                  type="warning"
+                  size="mini"
+                  @mousedown="controlLinePress(1, 'reset')"
+                  @mouseup="controlLineRelease(1, 'reset')"
+                  >1# 拆垛线复位</el-button
+                >
+                <el-button
+                  type="warning"
+                  size="mini"
+                  @mousedown="controlLinePress(2, 'reset')"
+                  @mouseup="controlLineRelease(2, 'reset')"
+                  >2# 拆垛线复位</el-button
+                >
+              </div>
             </div>
           </div>
         </div>
@@ -1139,6 +1189,8 @@ export default {
       },
       // 跟踪DBW106的当前值
       currentDBW106Value: 0,
+      // 跟踪DBW102的当前值
+      currentDBW102Value: 0,
       mechanicalArms: [
         {
           name: 'A1',
@@ -1395,71 +1447,71 @@ export default {
     this.initializeMarkers();
     this.startPalletMovePolling(); // 启动C区到AGV2-2托盘移动的轮询
     this.initWebSocketServer(); // 初始化WebSocket服务器
-    // ipcRenderer.on('receivedMsg', (event, values, values2) => {
-    //   // 使用位运算优化赋值
-    //   const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
+    ipcRenderer.on('receivedMsg', (event, values, values2) => {
+      // 使用位运算优化赋值
+      const getBit = (word, bitIndex) => ((word >> bitIndex) & 1).toString();
 
-    //   // 输送线当前运行状态
-    //   let word2 = this.convertToWord(values.DBW2);
-    //   this.conveyorStatus.bit0 = getBit(word2, 8);
-    //   this.conveyorStatus.bit1 = getBit(word2, 9);
-    //   this.conveyorStatus.bit2 = getBit(word2, 10);
-    //   this.conveyorStatus.bit3 = getBit(word2, 11);
-    //   this.conveyorStatus.bit4 = getBit(word2, 12);
-    //   this.conveyorStatus.bit5 = getBit(word2, 13);
-    //   this.conveyorStatus.bit6 = getBit(word2, 14);
-    //   this.conveyorStatus.bit7 = getBit(word2, 15);
-    //   this.conveyorStatus.bit8 = getBit(word2, 0);
-    //   this.conveyorStatus.bit9 = getBit(word2, 1);
-    //   this.conveyorStatus.bit10 = getBit(word2, 2);
-    //   this.conveyorStatus.bit11 = getBit(word2, 3);
-    //   this.conveyorStatus.bit12 = getBit(word2, 4);
-    //   this.conveyorStatus.bit13 = getBit(word2, 5);
-    //   this.conveyorStatus.bit14 = getBit(word2, 6);
-    //   this.conveyorStatus.bit15 = getBit(word2, 7);
+      // 输送线当前运行状态
+      let word2 = this.convertToWord(values.DBW2);
+      this.conveyorStatus.bit0 = getBit(word2, 8);
+      this.conveyorStatus.bit1 = getBit(word2, 9);
+      this.conveyorStatus.bit2 = getBit(word2, 10);
+      this.conveyorStatus.bit3 = getBit(word2, 11);
+      this.conveyorStatus.bit4 = getBit(word2, 12);
+      this.conveyorStatus.bit5 = getBit(word2, 13);
+      this.conveyorStatus.bit6 = getBit(word2, 14);
+      this.conveyorStatus.bit7 = getBit(word2, 15);
+      this.conveyorStatus.bit8 = getBit(word2, 0);
+      this.conveyorStatus.bit9 = getBit(word2, 1);
+      this.conveyorStatus.bit10 = getBit(word2, 2);
+      this.conveyorStatus.bit11 = getBit(word2, 3);
+      this.conveyorStatus.bit12 = getBit(word2, 4);
+      this.conveyorStatus.bit13 = getBit(word2, 5);
+      this.conveyorStatus.bit14 = getBit(word2, 6);
+      this.conveyorStatus.bit15 = getBit(word2, 7);
 
-    //   // 1#机器人状态
-    //   let word4 = this.convertToWord(values.DBW4);
-    //   this.robotStatus.bit0 = getBit(word4, 8);
-    //   this.robotStatus.bit1 = getBit(word4, 9);
-    //   this.robotStatus.bit2 = getBit(word4, 10);
-    //   this.robotStatus.bit3 = getBit(word4, 11);
-    //   this.robotStatus.bit4 = getBit(word4, 12);
-    //   this.robotStatus.bit5 = getBit(word4, 13);
-    //   this.robotStatus.bit6 = getBit(word4, 14);
-    //   this.robotStatus.bit7 = getBit(word4, 15);
-    //   this.robotStatus.bit8 = getBit(word4, 0);
-    //   this.robotStatus.bit9 = getBit(word4, 1);
-    //   this.robotStatus.bit10 = getBit(word4, 2);
-    //   this.robotStatus.bit11 = getBit(word4, 3);
+      // 1#机器人状态
+      let word4 = this.convertToWord(values.DBW4);
+      this.robotStatus.bit0 = getBit(word4, 8);
+      this.robotStatus.bit1 = getBit(word4, 9);
+      this.robotStatus.bit2 = getBit(word4, 10);
+      this.robotStatus.bit3 = getBit(word4, 11);
+      this.robotStatus.bit4 = getBit(word4, 12);
+      this.robotStatus.bit5 = getBit(word4, 13);
+      this.robotStatus.bit6 = getBit(word4, 14);
+      this.robotStatus.bit7 = getBit(word4, 15);
+      this.robotStatus.bit8 = getBit(word4, 0);
+      this.robotStatus.bit9 = getBit(word4, 1);
+      this.robotStatus.bit10 = getBit(word4, 2);
+      this.robotStatus.bit11 = getBit(word4, 3);
 
-    //   // 2#机器人状态
-    //   let word6 = this.convertToWord(values.DBW6);
-    //   this.robotStatus2.bit0 = getBit(word6, 8);
-    //   this.robotStatus2.bit1 = getBit(word6, 9);
-    //   this.robotStatus2.bit2 = getBit(word6, 10);
-    //   this.robotStatus2.bit3 = getBit(word6, 11);
-    //   this.robotStatus2.bit4 = getBit(word6, 12);
-    //   this.robotStatus2.bit5 = getBit(word6, 13);
-    //   this.robotStatus2.bit6 = getBit(word6, 14);
-    //   this.robotStatus2.bit7 = getBit(word6, 15);
-    //   this.robotStatus2.bit8 = getBit(word6, 0);
-    //   this.robotStatus2.bit9 = getBit(word6, 1);
-    //   this.robotStatus2.bit10 = getBit(word6, 2);
-    //   this.robotStatus2.bit11 = getBit(word6, 3);
+      // 2#机器人状态
+      let word6 = this.convertToWord(values.DBW6);
+      this.robotStatus2.bit0 = getBit(word6, 8);
+      this.robotStatus2.bit1 = getBit(word6, 9);
+      this.robotStatus2.bit2 = getBit(word6, 10);
+      this.robotStatus2.bit3 = getBit(word6, 11);
+      this.robotStatus2.bit4 = getBit(word6, 12);
+      this.robotStatus2.bit5 = getBit(word6, 13);
+      this.robotStatus2.bit6 = getBit(word6, 14);
+      this.robotStatus2.bit7 = getBit(word6, 15);
+      this.robotStatus2.bit8 = getBit(word6, 0);
+      this.robotStatus2.bit9 = getBit(word6, 1);
+      this.robotStatus2.bit10 = getBit(word6, 2);
+      this.robotStatus2.bit11 = getBit(word6, 3);
 
-    //   // AGV调度条件
-    //   let word8 = this.convertToWord(values.DBW8);
-    //   this.agvScheduleCondition.bit0 = getBit(word8, 8);
-    //   this.agvScheduleCondition.bit1 = getBit(word8, 9);
-    //   this.agvScheduleCondition.bit2 = getBit(word8, 10);
-    //   this.agvScheduleCondition.bit3 = getBit(word8, 11);
-    //   this.agvScheduleCondition.bit4 = getBit(word8, 12);
-    //   this.agvScheduleCondition.bit5 = getBit(word8, 13);
+      // AGV调度条件
+      let word8 = this.convertToWord(values.DBW8);
+      this.agvScheduleCondition.bit0 = getBit(word8, 8);
+      this.agvScheduleCondition.bit1 = getBit(word8, 9);
+      this.agvScheduleCondition.bit2 = getBit(word8, 10);
+      this.agvScheduleCondition.bit3 = getBit(word8, 11);
+      this.agvScheduleCondition.bit4 = getBit(word8, 12);
+      this.agvScheduleCondition.bit5 = getBit(word8, 13);
 
-    //   // 2800接货处条码
-    //   this.twoEightHundredPalletCode = values.DBB10 ?? '';
-    // });
+      // 2800接货处条码
+      this.twoEightHundredPalletCode = values.DBB10 ?? '';
+    });
   },
   watch: {
     isActive(newVal) {
@@ -1698,7 +1750,7 @@ export default {
         }
 
         const markers = imageWrapper.querySelectorAll(
-          '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button, .marker-with-flow, .robot-status-indicators'
+          '.marker, .marker-with-panel, .marker-with-panel-machine, .marker-with-button, .marker-with-flow, .robot-status-indicators, .control-button-group'
         );
         const wrapperRect = imageWrapper.getBoundingClientRect();
 
@@ -1987,6 +2039,11 @@ export default {
         // 如果是报警日志，推送到移动端（2800车间）
         this.pushAlarmToMobile(log);
       }
+
+      // 同时写入本地文件
+      const logTypeText = type === 'running' ? '运行日志' : '报警日志';
+      const logMessage = `[${logTypeText}] ${message}`;
+      ipcRenderer.send('writeLogToLocal', logMessage);
     },
     updateSchedulePlan(index) {
       // 更新排班计划
@@ -3131,6 +3188,74 @@ export default {
           this.addLog('2#机器人状态切换为：已停止');
         }
       }
+    },
+    // 获取位位置和动作名称
+    getBitPositionAndActionName(line, action) {
+      const lineName = `${line}#拆垛线`;
+      let bitPosition = 0;
+      let actionName = '';
+
+      // 根据line和action确定要设置的位
+      if (line === 1) {
+        switch (action) {
+          case 'start':
+            bitPosition = 12; // bit12：1#拆垛线启动按钮
+            actionName = `${lineName}启动`;
+            break;
+          case 'stop':
+            bitPosition = 13; // bit13：1#拆垛线停止按钮
+            actionName = `${lineName}停止`;
+            break;
+          case 'reset':
+            bitPosition = 10; // bit10：1#机器人复位按钮
+            actionName = `1#机器人复位`;
+            break;
+        }
+      } else if (line === 2) {
+        switch (action) {
+          case 'start':
+            bitPosition = 14; // bit14：2#拆垛线启动按钮
+            actionName = `${lineName}启动`;
+            break;
+          case 'stop':
+            bitPosition = 15; // bit15：2#拆垛线停止按钮
+            actionName = `${lineName}停止`;
+            break;
+          case 'reset':
+            bitPosition = 11; // bit11：2#机器人复位按钮
+            actionName = `2#机器人复位`;
+            break;
+        }
+      }
+
+      return { bitPosition, actionName };
+    },
+
+    // 按钮按下时调用
+    controlLinePress(line, action) {
+      const { bitPosition, actionName } = this.getBitPositionAndActionName(
+        line,
+        action
+      );
+
+      // 设置对应位为1（按下按钮）
+      this.currentDBW102Value |= 1 << bitPosition;
+      this.addLog(`发送PLC命令：${actionName}按钮按下`);
+      ipcRenderer.send('writeValuesToPLC', 'DBW102', this.currentDBW102Value);
+    },
+
+    // 按钮松开时调用
+    controlLineRelease(line, action) {
+      const { bitPosition, actionName } = this.getBitPositionAndActionName(
+        line,
+        action
+      );
+
+      // 设置对应位为0（松开按钮）
+      this.currentDBW102Value &= ~(1 << bitPosition);
+      ipcRenderer.send('writeValuesToPLC', 'DBW102', this.currentDBW102Value);
+
+      this.addLog(`发送PLC命令：${actionName}按钮松开`);
     }
   }
 };
@@ -3676,7 +3801,6 @@ export default {
                 border: 1px solid rgba(0, 231, 255, 0.2);
                 box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
                   inset 0 0 0 1px rgba(0, 231, 255, 0.05);
-                backdrop-filter: blur(12px);
                 width: 140px;
                 .data-panel-header {
                   color: #00e7ff;
@@ -4026,7 +4150,6 @@ export default {
   /* 自定义抽屉样式 */
   :deep(.storage-drawer) {
     background: rgba(24, 29, 47, 0.95) !important;
-    backdrop-filter: blur(12px);
   }
 
   :deep(.storage-drawer .el-drawer__header) {
@@ -4100,7 +4223,6 @@ export default {
 
 :deep(.test-panel-dialog) {
   background: rgba(24, 29, 47, 0.95);
-  backdrop-filter: blur(12px);
 }
 
 :deep(.test-panel-dialog .el-dialog__header) {
@@ -4141,7 +4263,6 @@ export default {
 :deep(.test-panel-dialog .el-select-dropdown) {
   background: rgba(24, 29, 47, 0.95);
   border: 1px solid rgba(64, 158, 255, 0.3);
-  backdrop-filter: blur(12px);
 }
 
 :deep(.test-panel-dialog .el-select-dropdown__item) {
@@ -4291,7 +4412,6 @@ export default {
   position: relative;
   overflow: hidden;
   white-space: nowrap;
-  transform: translateZ(0); /* 启用硬件加速 */
   backface-visibility: hidden; /* 防止闪烁 */
   .arrow-item {
     position: relative;
@@ -4329,7 +4449,6 @@ export default {
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(8px);
   cursor: pointer;
 }
 
@@ -4407,7 +4526,6 @@ export default {
 
 .agv-task-dialog {
   background: rgba(24, 29, 47, 0.95) !important;
-  backdrop-filter: blur(12px);
 
   :deep(.el-dialog__header) {
     padding: 12px 20px;
@@ -4574,6 +4692,55 @@ export default {
     background: #fff;
     border-radius: 4px;
     border: 1px solid #dcdfe6;
+  }
+}
+
+.control-button-group {
+  position: absolute;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  background: rgba(7, 41, 62, 0.85);
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(10, 197, 168, 0.25);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+  z-index: 5;
+
+  .control-panel-title {
+    grid-column: 1 / -1; /* Span all columns */
+    text-align: left;
+    color: #0ac5a8;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 2px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(10, 197, 168, 0.25);
+  }
+
+  .el-button {
+    margin: 0 !important;
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.3s ease;
+    border-radius: 6px;
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  .el-button--success {
+    background: linear-gradient(145deg, #189a51, #13773d);
+    border-color: #1a8f4b;
+  }
+  .el-button--danger {
+    background: linear-gradient(145deg, #c53d41, #a32b2e);
+    border-color: #b83438;
+  }
+  .el-button--warning {
+    background: linear-gradient(145deg, #e38c15, #b86f0d);
+    border-color: #d18111;
   }
 }
 </style>

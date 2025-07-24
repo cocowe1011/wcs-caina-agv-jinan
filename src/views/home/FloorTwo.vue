@@ -1257,6 +1257,11 @@ export default {
         // 如果是报警日志，推送到移动端（2500车间）
         this.pushAlarmToMobile(log);
       }
+
+      // 同时写入本地文件
+      const logTypeText = type === 'running' ? '运行日志' : '报警日志';
+      const logMessage = `[${logTypeText}] ${message}`;
+      ipcRenderer.send('writeLogToLocal', logMessage);
     },
     getProgressColor(completed, plan) {
       // 根据完成度计算进度条颜色
@@ -2783,7 +2788,6 @@ export default {
                 border: 1px solid rgba(0, 231, 255, 0.2);
                 box-shadow: 0 4px 20px rgba(0, 231, 255, 0.1),
                   inset 0 0 0 1px rgba(0, 231, 255, 0.05);
-                backdrop-filter: blur(12px);
                 width: 140px;
                 .data-panel-header {
                   color: #00e7ff;
@@ -3161,7 +3165,6 @@ export default {
   /* 自定义抽屉样式 */
   :deep(.storage-drawer) {
     background: rgba(24, 29, 47, 0.95) !important;
-    backdrop-filter: blur(12px);
   }
 
   :deep(.storage-drawer .el-drawer__header) {
@@ -3242,7 +3245,6 @@ export default {
 
 :deep(.test-panel-dialog) {
   background: rgba(24, 29, 47, 0.95);
-  backdrop-filter: blur(12px);
 }
 
 :deep(.test-panel-dialog .el-dialog__header) {
@@ -3283,7 +3285,6 @@ export default {
 :deep(.test-panel-dialog .el-select-dropdown) {
   background: rgba(24, 29, 47, 0.95);
   border: 1px solid rgba(64, 158, 255, 0.3);
-  backdrop-filter: blur(12px);
 }
 
 :deep(.test-panel-dialog .el-select-dropdown__item) {
@@ -3374,7 +3375,6 @@ export default {
 
 .agv-task-dialog {
   background: rgba(24, 29, 47, 0.95) !important;
-  backdrop-filter: blur(12px);
 
   :deep(.el-dialog__header) {
     padding: 12px 20px;

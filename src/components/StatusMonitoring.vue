@@ -8,12 +8,12 @@
     >
       <div class="inner">
         <i
-          class="el-icon-check icon"
+          class="el-icon-check"
           style="font-size: 28px; color: #fff"
           v-if="plcStatus"
         ></i>
         <i
-          class="el-icon-close icon"
+          class="el-icon-close"
           style="font-size: 28px; color: #fff"
           v-else
         ></i>
@@ -177,19 +177,5 @@ export default {
 }
 .offline {
   background-color: #f56c6c !important;
-}
-.icon {
-  animation: icon-animation 2s infinite;
-}
-@keyframes icon-animation {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.3);
-  }
-  100% {
-    transform: scale(1);
-  }
 }
 </style>
