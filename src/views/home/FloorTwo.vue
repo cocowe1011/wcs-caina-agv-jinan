@@ -898,6 +898,8 @@ export default {
           // 检查条码信息是否为NoRead
           if (this.twoFiveHundredPalletCode === 'NoRead') {
             this.addLog('2500接货处扫码失败：条码信息为NoRead', 'alarm');
+            // 重置扫码信息为默认值
+            this.resetScanInfo();
             return;
           }
           // 自动触发AGV运输任务，从2800到C区缓存位
@@ -1125,6 +1127,13 @@ export default {
       // 关闭测试面板
       this.testPanelVisible = false;
     },
+    // 重置扫码信息为默认值
+    resetScanInfo() {
+      this.scanInfo = {
+        descrC: '',
+        mudidi: ''
+      };
+    },
     getTrayInfo(trayCode) {
       const params = {
         traceid: trayCode.trim(),
@@ -1144,12 +1153,16 @@ export default {
           } else {
             // 没查询到货物信息，直接报警
             this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+            // 重置扫码信息为默认值
+            this.resetScanInfo();
           }
         })
         .catch((err) => {
           this.$message.error('查询托盘失败，请重试' + err);
           // 没查询到货物信息，直接报警
           this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+          // 重置扫码信息为默认值
+          this.resetScanInfo();
         });
     },
     dealScanCode(trayCode, wmsInfo) {
@@ -1740,9 +1753,10 @@ export default {
       })
         .then((res) => {
           if (res.data && Array.isArray(res.data)) {
-            this.currentAgvTasks = res.data.filter((item) =>
-              ['0', '1', '3', '4'].includes(item.trayStatus)
-            );
+            // 2500车间：仅保留 id > 300 的运行中任务
+            this.currentAgvTasks = res.data
+              .filter((item) => ['0', '1', '3', '4'].includes(item.trayStatus))
+              .filter((item) => Number(item.id) > 300);
           } else {
             this.currentAgvTasks = [];
             this.$message.warning('未获取到任务数据');

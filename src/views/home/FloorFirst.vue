@@ -661,6 +661,24 @@
                 移除
               </el-button>
             </div>
+            <div
+              class="card-actions"
+              v-if="
+                (currentStorageTitle === 'AGV2-2队列' ||
+                  currentStorageTitle === 'AGV2-3队列') &&
+                item.trayInfo
+              "
+            >
+              <el-button
+                type="text"
+                size="mini"
+                class="danger-button"
+                @click="handleRemoveFromAGVQueue(item)"
+              >
+                <i class="el-icon-delete"></i>
+                移除
+              </el-button>
+            </div>
           </div>
           <div class="storage-card-content">
             <template v-if="item.trayInfo">
@@ -1529,6 +1547,8 @@ export default {
           // 检查条码信息是否为NoRead
           if (this.twoEightHundredPalletCode === 'NoRead') {
             this.addLog('2800接货处扫码失败：条码信息为NoRead', 'alarm');
+            // 重置扫码信息为默认值
+            this.resetScanInfo();
             return;
           }
           // 自动触发AGV运输任务，从2800到C区缓存位
@@ -1630,6 +1650,46 @@ export default {
     }
   },
   methods: {
+    handleRemoveFromAGVQueue(position) {
+      // 仅用于 AGV2-2 / AGV2-3 队列的“真删”操作：只删除，不做其他动作
+      this.$confirm(
+        '确认从该队列中移除此托盘吗？此操作将永久删除该记录。',
+        '提示',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+        .then(() => {
+          const queueName = this.currentStorageArea; // 'AGV2-2' 或 'AGV2-3'
+          const param = { id: position.id };
+          HttpUtil.post('/queue_info/delete', param)
+            .then((res) => {
+              if (res.data == 1) {
+                this.addLog(
+                  `托盘${position.trayInfo}已从${queueName}队列删除。`
+                );
+                this.$message.success(
+                  `托盘${position.trayInfo}已从${queueName}队列删除。`
+                );
+                this.loadPalletStorageByArea(queueName);
+              } else {
+                this.addLog(`托盘${position.trayInfo}删除失败，请检查。`);
+                this.$message.error(
+                  `托盘${position.trayInfo}删除失败，请检查。`
+                );
+              }
+            })
+            .catch((err) => {
+              this.addLog(`托盘${position.trayInfo}删除失败，请检查。${err}`);
+              this.$message.error(
+                `托盘${position.trayInfo}删除失败，请检查。${err}`
+              );
+            });
+        })
+        .catch(() => {});
+    },
     getStatusText(status) {
       const statusTexts = {
         0: '空闲中',
@@ -1891,6 +1951,13 @@ export default {
       // 关闭测试面板
       this.testPanelVisible = false;
     },
+    // 重置扫码信息为默认值
+    resetScanInfo() {
+      this.scanInfo = {
+        descrC: '',
+        mudidi: ''
+      };
+    },
     getTrayInfo(trayCode) {
       const params = {
         traceid: trayCode.trim(),
@@ -1910,12 +1977,16 @@ export default {
           } else {
             // 没查询到货物信息，直接报警
             this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+            // 重置扫码信息为默认值
+            this.resetScanInfo();
           }
         })
         .catch((err) => {
           this.$message.error('查询托盘失败，请重试' + err);
           // 没查询到货物信息，直接报警
           this.addLog(`读取托盘失败：${trayCode}，请检查托盘是否存在`);
+          // 重置扫码信息为默认值
+          this.resetScanInfo();
         });
     },
     dealScanCode(trayCode, wmsInfo) {
