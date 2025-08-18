@@ -1274,7 +1274,7 @@ export default {
       // 同时写入本地文件
       const logTypeText = type === 'running' ? '运行日志' : '报警日志';
       const logMessage = `[${logTypeText}] ${message}`;
-      ipcRenderer.send('writeLogToLocal', logMessage);
+      ipcRenderer.send('writeLogToLocal', logMessage, '2500');
     },
     getProgressColor(completed, plan) {
       // 根据完成度计算进度条颜色

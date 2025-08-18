@@ -48,38 +48,42 @@ function logToFile(message) {
 }
 
 // 日志缓冲相关变量
-let logBuffer = [];
+let logBuffer = {
+  2800: [], // 2800车间日志缓冲区
+  2500: [] // 2500车间日志缓冲区
+};
 let logBufferTimer = null;
 const LOG_BUFFER_SIZE = 10; // 缓冲区大小
 const LOG_FLUSH_INTERVAL = 5000; // 5秒刷新一次
 
 // 优化的日志写入函数
-function writeLogToLocalOptimized(logData) {
+function writeLogToLocalOptimized(logData, workshop = '2800') {
   // 添加时间戳
   const timestamp = new Date().toLocaleString();
   const logEntry = `[${timestamp}] ${logData}\n`;
 
-  // 添加到缓冲区
-  logBuffer.push(logEntry);
+  // 添加到对应车间的缓冲区
+  if (!logBuffer[workshop]) {
+    logBuffer[workshop] = [];
+  }
+  logBuffer[workshop].push(logEntry);
 
   // 如果缓冲区满了，立即刷新
-  if (logBuffer.length >= LOG_BUFFER_SIZE) {
-    flushLogBuffer();
+  if (logBuffer[workshop].length >= LOG_BUFFER_SIZE) {
+    flushLogBuffer(workshop);
   } else if (!logBufferTimer) {
     // 设置定时器，定期刷新缓冲区
     logBufferTimer = setTimeout(() => {
-      flushLogBuffer();
+      flushAllLogBuffers();
     }, LOG_FLUSH_INTERVAL);
   }
 }
 
-// 刷新日志缓冲区
-function flushLogBuffer() {
-  if (logBuffer.length === 0) return;
+// 刷新指定车间的日志缓冲区
+function flushLogBuffer(workshop) {
+  if (!logBuffer[workshop] || logBuffer[workshop].length === 0) return;
 
-  const logPath =
-    'D://wcs_temp_data/log/' +
-    (new Date().toLocaleDateString() + '.txt').replaceAll('/', '-');
+  const logPath = getLogPath(workshop);
 
   // 确保日志目录存在
   const logDir = 'D://wcs_temp_data/log';
@@ -96,23 +100,30 @@ function flushLogBuffer() {
         // 创建备份文件
         const backupPath = logPath.replace('.txt', `_${Date.now()}.txt`);
         fs.renameSync(logPath, backupPath);
-        console.log(`日志文件过大，已轮转到: ${backupPath}`);
+        console.log(`${workshop}车间日志文件过大，已轮转到: ${backupPath}`);
       }
     }
   } catch (error) {
-    console.error('检查日志文件大小时出错:', error);
+    console.error(`检查${workshop}车间日志文件大小时出错:`, error);
   }
 
   // 批量写入日志
-  const logContent = logBuffer.join('');
+  const logContent = logBuffer[workshop].join('');
   fs.appendFile(logPath, logContent, (err) => {
     if (err) {
-      console.error('Error writing to log file:', err);
+      console.error(`Error writing to ${workshop} workshop log file:`, err);
     }
   });
 
   // 清空缓冲区
-  logBuffer = [];
+  logBuffer[workshop] = [];
+}
+
+// 刷新所有车间的日志缓冲区
+function flushAllLogBuffers() {
+  Object.keys(logBuffer).forEach((workshop) => {
+    flushLogBuffer(workshop);
+  });
 
   // 清除定时器
   if (logBufferTimer) {
@@ -120,10 +131,18 @@ function flushLogBuffer() {
     logBufferTimer = null;
   }
 }
+
+// 获取指定车间的日志文件路径
+function getLogPath(workshop) {
+  const dateStr = new Date().toLocaleDateString().replaceAll('/', '-');
+  return `D://wcs_temp_data/log/${workshop}_${dateStr}.txt`;
+}
 // electron 开启热更新
 try {
   require('electron-reloader')(module, {});
-} catch (_) {}
+} catch (_) {
+  // 忽略electron-reloader加载失败的错误
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -133,7 +152,7 @@ app.on('window-all-closed', () => {
 
 // 应用退出时确保所有日志都被写入
 app.on('before-quit', () => {
-  flushLogBuffer();
+  flushAllLogBuffers();
 });
 
 global.sharedObject = {
@@ -414,8 +433,8 @@ app.on('ready', () => {
       : mainWindow.setFullScreen(true);
   });
   // 定义自定义事件 - 优化后的日志写入
-  ipcMain.on('writeLogToLocal', (event, arg) => {
-    writeLogToLocalOptimized(arg);
+  ipcMain.on('writeLogToLocal', (event, logData, workshop = '2800') => {
+    writeLogToLocalOptimized(logData, workshop);
   });
 });
 

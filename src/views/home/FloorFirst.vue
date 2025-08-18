@@ -1651,7 +1651,7 @@ export default {
   },
   methods: {
     handleRemoveFromAGVQueue(position) {
-      // 仅用于 AGV2-2 / AGV2-3 队列的“真删”操作：只删除，不做其他动作
+      // 仅用于 AGV2-2 / AGV2-3 队列的"真删"操作：只删除，不做其他动作
       this.$confirm(
         '确认从该队列中移除此托盘吗？此操作将永久删除该记录。',
         '提示',
@@ -2114,7 +2114,7 @@ export default {
       // 同时写入本地文件
       const logTypeText = type === 'running' ? '运行日志' : '报警日志';
       const logMessage = `[${logTypeText}] ${message}`;
-      ipcRenderer.send('writeLogToLocal', logMessage);
+      ipcRenderer.send('writeLogToLocal', logMessage, '2800');
     },
     updateSchedulePlan(index) {
       // 更新排班计划
