@@ -896,7 +896,11 @@ export default {
         if (newVal === '1') {
           this.addLog(`2500接货处扫码数据：${this.twoFiveHundredPalletCode}`);
           // 检查条码信息是否为NoRead
-          if (this.twoFiveHundredPalletCode === 'NoRead') {
+          if (
+            !this.twoFiveHundredPalletCode ||
+            this.twoFiveHundredPalletCode === '' ||
+            this.twoFiveHundredPalletCode.toLowerCase().includes('noread')
+          ) {
             this.addLog('2500接货处扫码失败：条码信息为NoRead', 'alarm');
             // 重置扫码信息为默认值
             this.resetScanInfo();

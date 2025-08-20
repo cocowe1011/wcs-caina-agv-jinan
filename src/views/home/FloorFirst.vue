@@ -1545,7 +1545,11 @@ export default {
         if (newVal === '1') {
           this.addLog(`2800接货处扫码数据：${this.twoEightHundredPalletCode}`);
           // 检查条码信息是否为NoRead
-          if (this.twoEightHundredPalletCode === 'NoRead') {
+          if (
+            !this.twoEightHundredPalletCode ||
+            this.twoEightHundredPalletCode === '' ||
+            this.twoEightHundredPalletCode.toLowerCase().includes('noread')
+          ) {
             this.addLog('2800接货处扫码失败：条码信息为NoRead', 'alarm');
             // 重置扫码信息为默认值
             this.resetScanInfo();
@@ -2746,6 +2750,11 @@ export default {
       let fromSiteCode = '';
       let toSiteCode = '';
       if (destination.startsWith('D')) {
+        // 发往1楼D的命令，起点只能是C队列
+        if (!item.queueName.startsWith('C')) {
+          this.$message.error('只有一楼缓存库位可以发往一楼目的地');
+          return;
+        }
         // 根据托盘信息给AGV小车发送指令
         this.addLog(
           `正在发送托盘 ${item.trayInfo} 至 ${destination}...先途径AGV2-2...`
@@ -2755,6 +2764,11 @@ export default {
         fromSiteCode = item.queueName + item.queueNum;
         toSiteCode = '201';
       } else if (destination.startsWith('E')) {
+        // 发往3楼E的命令，起点只能是B队列
+        if (!item.queueName.startsWith('B')) {
+          this.$message.error('只有三楼缓存库位可以发往三楼目的地');
+          return;
+        }
         // 根据托盘信息给AGV小车发送指令
         this.addLog(
           `正在发送托盘 ${item.trayInfo} 至 ${destination}...先途径AGV2-3...`
