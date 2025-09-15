@@ -3069,7 +3069,7 @@ export default {
       // 组装入参
       const params = {
         robotTaskCode: robotTaskCode,
-        cancelType: 'CANCEL'
+        cancelType: 'DROP'
       };
       this.addLog(
         `发送AGV取消指令: 机器人任务编码=${robotTaskCode}, 托盘信息=${trayInfo}`
