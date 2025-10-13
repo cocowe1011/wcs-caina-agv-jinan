@@ -34,6 +34,7 @@
             class="user-code"
             spellcheck="false"
             v-model="userCode"
+            @keyup.enter.native="login"
           ></el-input>
           <el-input
             placeholder="请输入密码"
@@ -42,6 +43,7 @@
             v-model="userPassword"
             spellcheck="false"
             show-password
+            @keyup.enter.native="login"
           ></el-input>
           <p class="tips">忘记密码请联系管理员</p>
           <el-button
