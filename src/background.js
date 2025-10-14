@@ -239,6 +239,14 @@ app.on('ready', () => {
   ipcMain.on('writeValuesToPLC', (event, arg1, arg2) => {
     writeValuesToPLC(arg1, arg2);
   });
+  // writeSingleValueToPLC - 单独给PLC某个变量写值，通过批量写入数组实现
+  ipcMain.on('writeSingleValueToPLC', (event, arg1, arg2) => {
+    writeSingleValueToPLC(arg1, arg2);
+  });
+  // cancelWriteToPLC - 取消PLC某个变量的写入
+  ipcMain.on('cancelWriteToPLC', (event, arg1) => {
+    cancelWriteToPLC(arg1);
+  });
 
   // ============ WebSocket服务器IPC处理 ============
 
@@ -539,15 +547,48 @@ var variables = {
   DBB10: 'DB101,C10.10', // 2800接货处条码
   DBB20: 'DB101,C20.10', // 2500接货处条码信息
   DBW100: 'DB101,INT100', // WCS看门狗心跳
-  DBW102: 'DB101,INT102', // 1#机器人状态
-  DBW104: 'DB101,INT104', // 2#机器人状态
-  DBW106: 'DB101,INT106', // AGV调度条件
+  DBW102_BIT0: 'DB101,X102.0', // 1#机器人状态-值为1时，1#机器人A送货完成
+  DBW102_BIT1: 'DB101,X102.1', // 1#机器人状态-值为1时，1#机器人A需要清理空托盘完成
+  DBW102_BIT2: 'DB101,X102.2', // 1#机器人状态-值为1时，1#机器人B送货完成
+  DBW102_BIT3: 'DB101,X102.3', // 1#机器人状态-值为1时，1#机器人B需要清理空托盘完成
+  DBW102_BIT4: 'DB101,X102.4', // 1#机器人状态-值为1时，1#机器人C送货完成
+  DBW102_BIT5: 'DB101,X102.5', // 1#机器人状态-值为1时，1#机器人C需要清理杂物托盘完成
+  DBW102_BIT6: 'DB101,X102.6', // 1#机器人状态-值为1时，1#机器人D送货完成
+  DBW102_BIT7: 'DB101,X102.7', // 1#机器人状态-值为1时，1#机器人D需要清理托盘
+  DBW102_BIT8: 'DB101,X103.0', // 1#机器人状态-值为1时，1#机器人E送货完成
+  DBW102_BIT9: 'DB101,X103.1', // 1#机器人状态-值为1时，1#机器人E需要清理托盘完成
+  DBW102_BIT10: 'DB101,X103.2', // 1#机器人状态-1#机器人复位按钮，按下为1，松开为0
+  DBW102_BIT11: 'DB101,X103.3', // 1#机器人状态-2#机器人复位按钮，按下为1  松开为0
+  DBW102_BIT12: 'DB101,X103.4', // 1#机器人状态-1#拆垛线启动按钮，按下为1松开为0
+  DBW102_BIT13: 'DB101,X103.5', // 1#机器人状态-1#拆垛线停止按钮，按下为1松开为0
+  DBW102_BIT14: 'DB101,X103.6', // 1#机器人状态-2#拆垛线启动按钮，按下为1松开为0
+  DBW102_BIT15: 'DB101,X103.7', // 1#机器人状态-2#拆垛线停止按钮，按下为1松开为0
+  DBW104_BIT0: 'DB101,X104.0', // 2#机器人状态-值为1时，2#机器人A送货完成
+  DBW104_BIT1: 'DB101,X104.1', // 2#机器人状态-值为1时，2#机器人A需要清理空托盘完成
+  DBW104_BIT2: 'DB101,X104.2', // 2#机器人状态-值为1时，2#机器人B送货完成
+  DBW104_BIT3: 'DB101,X104.3', // 2#机器人状态-值为1时，2#机器人B需要清理空托盘完成
+  DBW104_BIT4: 'DB101,X104.4', // 2#机器人状态-值为1时，2#机器人C送货完成
+  DBW104_BIT5: 'DB101,X104.5', // 2#机器人状态-值为1时，2#机器人C需要清理杂物托盘完成
+  DBW104_BIT6: 'DB101,X104.6', // 2#机器人状态-值为1时，2#机器人D送货完成
+  DBW104_BIT7: 'DB101,X104.7', // 2#机器人状态-值为1时，2#机器人D需要清理托盘完成
+  DBW104_BIT8: 'DB101,X104.8', // 2#机器人状态-值为1时，2#机器人E送货完成
+  DBW104_BIT9: 'DB101,X105.0', // 2#机器人状态-值为1时，2#机器人E需要清理托盘完成
+  DBW106_BIT0: 'DB101,X106.0', // 2800转盘处接货完成
+  DBW106_BIT1: 'DB101,X106.1', // 2500接驳口接货完成
+  DBW106_BIT2: 'DB101,X106.2', // AGV2-2放货完成
+  DBW106_BIT3: 'DB101,X106.3', // AGV2-3放货完成
+  DBW106_BIT4: 'DB101,X106.4', // AGV3-1取货完成
+  DBW106_BIT5: 'DB101,X106.5', // AGV1-1取货完成
+  DBW106_BIT6: 'DB101,X106.6', // 机器人1暂停信号 只发2s
+  DBW106_BIT7: 'DB101,X106.7', // 机器人2暂停信号 只发2s
+  DBW106_BIT8: 'DB101,X106.8', // 机器人1复位信号 只发2s
+  DBW106_BIT9: 'DB101,X107.0', // 机器人2复位信号 只发2s
   DBB110: 'DB101,C110.10', // 去三楼提升机放货处条码
   DBB120: 'DB101,C120.10' // 去一楼提升机放货处条码
 };
 
-var writeStrArr = [0, 0, 0, 0, '', ''];
-var writeAddArr = ['DBW100', 'DBW102', 'DBW104', 'DBW106', 'DBB110', 'DBB120'];
+var writeStrArr = [0, '', ''];
+var writeAddArr = ['DBW100', 'DBB110', 'DBB120'];
 
 // 给PLC写值
 function writeValuesToPLC(add, values) {
@@ -557,6 +598,73 @@ function writeValuesToPLC(add, values) {
   } else {
     console.warn(`Address ${add} not found in writeAddArr.`);
   }
+}
+
+// 单独给PLC某个变量写值，通过操作批量写入数组实现，避免写入冲突
+function writeSingleValueToPLC(add, values) {
+  if (!variables[add]) {
+    console.warn(`Address ${add} not found in variables.`);
+    return;
+  }
+
+  // 查找地址在批量写入数组中的索引
+  const index = writeAddArr.indexOf(add);
+
+  if (index !== -1) {
+    // 地址已存在，直接更新值（这个操作是原子的）
+    writeStrArr[index] = values;
+    console.log(`更新PLC地址 ${add} 的值为：${values}`);
+  } else {
+    // 地址不存在，使用原子性操作添加到批量写入数组
+    const newAddArr = [...writeAddArr, add];
+    const newStrArr = [...writeStrArr, values];
+
+    // 原子性替换数组内容
+    writeAddArr.length = 0;
+    writeStrArr.length = 0;
+    writeAddArr.push(...newAddArr);
+    writeStrArr.push(...newStrArr);
+
+    console.log(`添加PLC地址 ${add} 到批量写入数组，值：${values}`);
+  }
+}
+
+// 取消PLC某个变量的写入，从批量写入数组中移除
+function cancelWriteToPLC(add) {
+  // 使用 filter 方法重建数组，避免 splice 的并发问题
+  const originalLength = writeAddArr.length;
+  const newAddArr = [];
+  const newStrArr = [];
+
+  for (let i = 0; i < writeAddArr.length; i++) {
+    if (writeAddArr[i] !== add) {
+      newAddArr.push(writeAddArr[i]);
+      newStrArr.push(writeStrArr[i]);
+    }
+  }
+
+  // 检查是否找到并移除了地址
+  if (newAddArr.length === originalLength) {
+    console.warn(`Address ${add} not found in writeAddArr, cannot cancel.`);
+    return false;
+  }
+
+  // 原子性替换数组内容
+  writeAddArr.length = 0;
+  writeStrArr.length = 0;
+  writeAddArr.push(...newAddArr);
+  writeStrArr.push(...newStrArr);
+
+  console.log(`已从批量写入数组中移除PLC地址：${add}`);
+
+  // 验证数组长度一致性
+  if (writeAddArr.length !== writeStrArr.length) {
+    console.error(
+      `数组长度不一致！地址数组长度：${writeAddArr.length}，值数组长度：${writeStrArr.length}`
+    );
+  }
+
+  return true;
 }
 
 function valuesWritten(anythingBad) {

@@ -1074,7 +1074,15 @@ export default {
         cancelButtonText: '取消',
         type: 'warning'
       })
-        .then(() => {
+        .then(async () => {
+          // 先调用AGV解绑接口
+          const slotCode = position.queueName + position.queueNum;
+          const unbindSuccess = await this.sendAgvUnbindCommand(slotCode);
+
+          if (!unbindSuccess) {
+            this.$message.warning('AGV解绑失败，但将继续移除托盘');
+          }
+
           // 调用API更新数据库中的托盘信息
           HttpUtil.post('/queue_info/update', {
             id: position.id,
@@ -1687,6 +1695,10 @@ export default {
         this.$message.warning('源位置和目标位置不能相同。');
         return;
       }
+
+      const sourceSlotCode = source.queueName + source.queueNum;
+      const targetSlotCode = target.queueName + target.queueNum;
+
       const fieldsToHandle = [
         'trayInfo',
         'trayStatus',
@@ -1700,6 +1712,7 @@ export default {
       const updates = [];
 
       if (target.trayInfo) {
+        // 情况：两个位置互换托盘，AGV只需要知道这两个位置都有托盘，不需要额外绑定/解绑
         const sourceUpdate = { id: source.id };
         const targetUpdate = { id: target.id };
 
@@ -1708,7 +1721,25 @@ export default {
           targetUpdate[field] = source[field];
         });
         updates.push(sourceUpdate, targetUpdate);
+        this.addLog(
+          `托盘互换：${sourceSlotCode} ↔ ${targetSlotCode}，无需AGV绑定操作`
+        );
       } else {
+        // 情况：源位置托盘移到空位置
+        // 需要：在目标位置绑定，在源位置解绑
+
+        // 先在目标位置绑定
+        const bindSuccess = await this.sendAgvBindCommand(targetSlotCode);
+        if (!bindSuccess) {
+          this.$message.warning('目标位置AGV绑定失败，但将继续移动托盘');
+        }
+
+        // 再在源位置解绑
+        const unbindSuccess = await this.sendAgvUnbindCommand(sourceSlotCode);
+        if (!unbindSuccess) {
+          this.$message.warning('源位置AGV解绑失败，但将继续移动托盘');
+        }
+
         const targetUpdate = { id: target.id };
         fieldsToHandle.forEach((field) => {
           targetUpdate[field] = source[field];
@@ -2262,6 +2293,74 @@ export default {
       this.alarmLogs.forEach((log) => {
         log.unread = false;
       });
+    },
+
+    // AGV托盘绑定
+    async sendAgvBindCommand(slotCode) {
+      const params = {
+        carrierCategory: 'PALLET',
+        carrierType: '2',
+        colCount: 1,
+        invoke: 'BIND',
+        slotCategory: 'SITE',
+        slotCode: slotCode,
+        temporary: 1
+      };
+      this.addLog(`发送AGV绑定指令: 位置=${slotCode}`);
+      try {
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/matlabel/bind',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV绑定成功: 位置${slotCode}`);
+          return true;
+        } else {
+          const errorMsg = res.message || '未知错误';
+          this.addLog(`AGV绑定失败: ${errorMsg}`);
+          this.addLog(`AGV绑定失败: ${errorMsg}`, 'alarm');
+          return false;
+        }
+      } catch (err) {
+        console.error('发送AGV绑定指令失败:', err);
+        this.addLog(`AGV绑定失败: ${err.message || '未知错误'}`);
+        this.addLog(`AGV绑定失败: ${err.message || '未知错误'}`, 'alarm');
+        return false;
+      }
+    },
+
+    // AGV托盘解绑
+    async sendAgvUnbindCommand(slotCode) {
+      const params = {
+        carrierCategory: 'PALLET',
+        carrierType: '2',
+        colCount: 1,
+        invoke: 'UNBIND',
+        slotCategory: 'SITE',
+        slotCode: slotCode,
+        temporary: 1
+      };
+      this.addLog(`发送AGV解绑指令: 位置=${slotCode}`);
+      try {
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/matlabel/unbind',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV解绑成功: 位置${slotCode}`);
+          return true;
+        } else {
+          const errorMsg = res.message || '未知错误';
+          this.addLog(`AGV解绑失败: ${errorMsg}`);
+          this.addLog(`AGV解绑失败: ${errorMsg}`, 'alarm');
+          return false;
+        }
+      } catch (err) {
+        console.error('发送AGV解绑指令失败:', err);
+        this.addLog(`AGV解绑失败: ${err.message || '未知错误'}`);
+        this.addLog(`AGV解绑失败: ${err.message || '未知错误'}`, 'alarm');
+        return false;
+      }
     }
   }
 };

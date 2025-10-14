@@ -1205,8 +1205,6 @@ export default {
         B: [],
         C: []
       },
-      // 跟踪DBW106的当前值
-      currentDBW106Value: 0,
       // 跟踪DBW102的当前值
       currentDBW102Value: 0,
       mechanicalArms: [
@@ -1481,27 +1479,27 @@ export default {
       this.conveyorStatus.bit7 = getBit(word2, 15);
       this.conveyorStatus.bit8 = getBit(word2, 0);
       this.conveyorStatus.bit9 = getBit(word2, 1);
-      this.conveyorStatus.bit10 = getBit(word2, 2);
-      this.conveyorStatus.bit11 = getBit(word2, 3);
-      this.conveyorStatus.bit12 = getBit(word2, 4);
-      this.conveyorStatus.bit13 = getBit(word2, 5);
-      this.conveyorStatus.bit14 = getBit(word2, 6);
-      this.conveyorStatus.bit15 = getBit(word2, 7);
+      this.conveyorStatus.bit10 = getBit(word2, 2); // 1#机器人暂停中信号（AGV送货暂停、门安全暂停）
+      this.conveyorStatus.bit11 = getBit(word2, 3); // 2#机器人暂停中信号（AGV送货暂停、门安全暂停）
+      this.conveyorStatus.bit12 = getBit(word2, 4); // 1#机器人安全门被打开（信号为1时，不能复位暂停）
+      this.conveyorStatus.bit13 = getBit(word2, 5); // 2#机器人安全门被打开（信号为1时，不能复位暂停）
+      this.conveyorStatus.bit14 = getBit(word2, 6); // 1#拆垛线机器人启动中
+      this.conveyorStatus.bit15 = getBit(word2, 7); // 2#拆垛线机器人启动中
 
       // 1#机器人状态
       let word4 = this.convertToWord(values.DBW4);
-      this.robotStatus.bit0 = getBit(word4, 8);
-      this.robotStatus.bit1 = getBit(word4, 9);
-      this.robotStatus.bit2 = getBit(word4, 10);
-      this.robotStatus.bit3 = getBit(word4, 11);
-      this.robotStatus.bit4 = getBit(word4, 12);
-      this.robotStatus.bit5 = getBit(word4, 13);
-      this.robotStatus.bit6 = getBit(word4, 14);
-      this.robotStatus.bit7 = getBit(word4, 15);
-      this.robotStatus.bit8 = getBit(word4, 0);
-      this.robotStatus.bit9 = getBit(word4, 1);
-      this.robotStatus.bit10 = getBit(word4, 2);
-      this.robotStatus.bit11 = getBit(word4, 3);
+      this.robotStatus.bit0 = getBit(word4, 8); // 值为1时，2#机器人A缺货
+      this.robotStatus.bit1 = getBit(word4, 9); // 值为1时，2#机器人A需要清理空托盘
+      this.robotStatus.bit2 = getBit(word4, 10); // 值为1时，2#机器人B缺货
+      this.robotStatus.bit3 = getBit(word4, 11); // 值为1时，2#机器人B需要清理空托盘
+      this.robotStatus.bit4 = getBit(word4, 12); // 值为1时，2#机器人C缺货
+      this.robotStatus.bit5 = getBit(word4, 13); // 值为1时，2#机器人C需要清理杂物托盘
+      this.robotStatus.bit6 = getBit(word4, 14); // 值为1时，2#机器人D缺货
+      this.robotStatus.bit7 = getBit(word4, 15); // 值为1时，2#机器人D需要清理托盘
+      this.robotStatus.bit8 = getBit(word4, 0); // 值为1时，2#机器人E缺货
+      this.robotStatus.bit9 = getBit(word4, 1); // 值为1时，2#机器人E需要清理托盘
+      this.robotStatus.bit10 = getBit(word4, 2); // 值为1时，去三楼灌装车间A输送线启动中
+      this.robotStatus.bit11 = getBit(word4, 3); // 值为1时，去三楼灌装车间B输送线启动中
 
       // 2#机器人状态
       let word6 = this.convertToWord(values.DBW6);
@@ -1667,6 +1665,15 @@ export default {
       )
         .then(() => {
           const queueName = this.currentStorageArea; // 'AGV2-2' 或 'AGV2-3'
+
+          // 先调用AGV解绑接口（AGV2-2对应201，AGV2-3对应301），先去掉吧，这里是否需要对接还不一定
+          // const slotCode = queueName === 'AGV2-2' ? '201' : '301';
+          // const unbindSuccess = await this.sendAgvUnbindCommand(slotCode);
+
+          // if (!unbindSuccess) {
+          //   this.$message.warning('AGV解绑失败，但将继续删除托盘');
+          // }
+
           const param = { id: position.id };
           HttpUtil.post('/queue_info/delete', param)
             .then((res) => {
@@ -1898,7 +1905,15 @@ export default {
         cancelButtonText: '取消',
         type: 'warning'
       })
-        .then(() => {
+        .then(async () => {
+          // 先调用AGV解绑接口
+          const slotCode = position.queueName + position.queueNum;
+          const unbindSuccess = await this.sendAgvUnbindCommand(slotCode);
+
+          if (!unbindSuccess) {
+            this.$message.warning('AGV解绑失败，但将继续移除托盘');
+          }
+
           // 调用API更新数据库中的托盘信息
           HttpUtil.post('/queue_info/update', {
             id: position.id,
@@ -2597,31 +2612,20 @@ export default {
             // 设置第2位为1，保留其他位
             // 修改位操作，与读取时保持一致，使用第13位（对应bit5）
             if (queueName === 'AGV2-2') {
-              this.currentDBW106Value |= 1 << 13; // 按位或，设置第13位为1
+              // 先写入控制按钮值1
+              ipcRenderer.send('writeSingleValueToPLC', 'DBW106_BIT5', true);
+              // 2秒后取消写入
+              setTimeout(() => {
+                ipcRenderer.send('writeSingleValueToPLC', 'DBW106_BIT5', false);
+              }, 2000);
             } else if (queueName === 'AGV2-3') {
-              this.currentDBW106Value |= 1 << 12; // 按位或，设置第14位为1
+              // 先写入控制按钮值1
+              ipcRenderer.send('writeSingleValueToPLC', 'DBW106_BIT4', true);
+              // 2秒后取消写入
+              setTimeout(() => {
+                ipcRenderer.send('writeSingleValueToPLC', 'DBW106_BIT4', false);
+              }, 2000);
             }
-            ipcRenderer.send(
-              'writeValuesToPLC',
-              'DBW106',
-              this.currentDBW106Value
-            );
-
-            // 再过1秒后发送第三个命令
-            setTimeout(() => {
-              // 清除第2位为0，保留其他位
-              // 修改位操作，与读取时保持一致，使用第13位（对应bit5）
-              if (queueName === 'AGV2-2') {
-                this.currentDBW106Value &= ~(1 << 13); // 按位与上第13位的反码，清除第13位
-              } else if (queueName === 'AGV2-3') {
-                this.currentDBW106Value &= ~(1 << 12); // 按位与上第12位的反码，清除第12位
-              }
-              ipcRenderer.send(
-                'writeValuesToPLC',
-                'DBW106',
-                this.currentDBW106Value
-              );
-            }, 1000);
             this.addLog(
               `托盘${pallets[0].trayInfo}已从${queueName}队列删除，已给PLC触发取货完成信号。`
             );
@@ -2647,7 +2651,7 @@ export default {
             // 给PLC写条码数据
             ipcRenderer.send(
               'writeValuesToPLC',
-              queueName === 'AGV2-2' ? 'DBB120' : 'DBB130',
+              queueName === 'AGV2-2' ? 'DBB120' : 'DBB110',
               firstPallet.trayInfo
             );
             // 1秒后发送第二个命令
@@ -2655,31 +2659,28 @@ export default {
               // 设置第2位为1，保留其他位
               // 修改位操作，与读取时保持一致，使用第10位（对应bit2）
               if (queueName === 'AGV2-2') {
-                this.currentDBW106Value |= 1 << 10; // 按位或，设置第10位为1
+                // 先写入控制按钮值1
+                ipcRenderer.send('writeSingleValueToPLC', 'DBW106_BIT2', true);
+                // 2秒后取消写入
+                setTimeout(() => {
+                  ipcRenderer.send(
+                    'writeSingleValueToPLC',
+                    'DBW106_BIT2',
+                    false
+                  );
+                }, 2000);
               } else if (queueName === 'AGV2-3') {
-                this.currentDBW106Value |= 1 << 11; // 按位或，设置第11位为1
+                // 先写入控制按钮值1
+                ipcRenderer.send('writeSingleValueToPLC', 'DBW106_BIT3', true);
+                // 2秒后取消写入
+                setTimeout(() => {
+                  ipcRenderer.send(
+                    'writeSingleValueToPLC',
+                    'DBW106_BIT3',
+                    false
+                  );
+                }, 2000);
               }
-              ipcRenderer.send(
-                'writeValuesToPLC',
-                'DBW106',
-                this.currentDBW106Value
-              );
-
-              // 再过1秒后发送第三个命令
-              setTimeout(() => {
-                // 清除第2位为0，保留其他位
-                // 修改位操作，与读取时保持一致，使用第10位（对应bit2）
-                if (queueName === 'AGV2-2') {
-                  this.currentDBW106Value &= ~(1 << 10); // 按位与上第10位的反码，清除第10位
-                } else if (queueName === 'AGV2-3') {
-                  this.currentDBW106Value &= ~(1 << 11); // 按位与上第11位的反码，清除第11位
-                }
-                ipcRenderer.send(
-                  'writeValuesToPLC',
-                  'DBW106',
-                  this.currentDBW106Value
-                );
-              }, 1000);
             }, 1000);
             this.addLog(
               `收到AGV放货消息，托盘${firstPallet.trayInfo}已进入${queueName}队列，已给PLC发送条码数据。`
@@ -2887,6 +2888,10 @@ export default {
         this.$message.warning('源位置和目标位置不能相同。');
         return;
       }
+
+      const sourceSlotCode = source.queueName + source.queueNum;
+      const targetSlotCode = target.queueName + target.queueNum;
+
       const fieldsToHandle = [
         'trayInfo',
         'trayStatus',
@@ -2897,6 +2902,7 @@ export default {
       const updates = [];
 
       if (target.trayInfo) {
+        // 情况：两个位置互换托盘，AGV只需要知道这两个位置都有托盘，不需要额外绑定/解绑
         const sourceUpdate = { id: source.id };
         const targetUpdate = { id: target.id };
 
@@ -2905,7 +2911,25 @@ export default {
           targetUpdate[field] = source[field];
         });
         updates.push(sourceUpdate, targetUpdate);
+        this.addLog(
+          `托盘互换：${sourceSlotCode} ↔ ${targetSlotCode}，无需AGV绑定操作`
+        );
       } else {
+        // 情况：源位置托盘移到空位置
+        // 需要：在目标位置绑定，在源位置解绑
+
+        // 先在目标位置绑定
+        const bindSuccess = await this.sendAgvBindCommand(targetSlotCode);
+        if (!bindSuccess) {
+          this.$message.warning('目标位置AGV绑定失败，但将继续移动托盘');
+        }
+
+        // 再在源位置解绑
+        const unbindSuccess = await this.sendAgvUnbindCommand(sourceSlotCode);
+        if (!unbindSuccess) {
+          this.$message.warning('源位置AGV解绑失败，但将继续移动托盘');
+        }
+
         const targetUpdate = { id: target.id };
         fieldsToHandle.forEach((field) => {
           targetUpdate[field] = source[field];
@@ -3118,6 +3142,72 @@ export default {
         this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`);
         this.addLog(`AGV指令发送失败: ${err.message || '未知错误'}`, 'alarm');
         return '';
+      }
+    },
+    // AGV托盘绑定
+    async sendAgvBindCommand(slotCode) {
+      const params = {
+        carrierCategory: 'PALLET',
+        carrierType: '2',
+        colCount: 1,
+        invoke: 'BIND',
+        slotCategory: 'SITE',
+        slotCode: slotCode,
+        temporary: 1
+      };
+      this.addLog(`发送AGV绑定指令: 位置=${slotCode}`);
+      try {
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/matlabel/bind',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV绑定成功: 位置${slotCode}`);
+          return true;
+        } else {
+          const errorMsg = res.message || '未知错误';
+          this.addLog(`AGV绑定失败: ${errorMsg}`);
+          this.addLog(`AGV绑定失败: ${errorMsg}`, 'alarm');
+          return false;
+        }
+      } catch (err) {
+        console.error('发送AGV绑定指令失败:', err);
+        this.addLog(`AGV绑定失败: ${err.message || '未知错误'}`);
+        this.addLog(`AGV绑定失败: ${err.message || '未知错误'}`, 'alarm');
+        return false;
+      }
+    },
+    // AGV托盘解绑
+    async sendAgvUnbindCommand(slotCode) {
+      const params = {
+        carrierCategory: 'PALLET',
+        carrierType: '2',
+        colCount: 1,
+        invoke: 'UNBIND',
+        slotCategory: 'SITE',
+        slotCode: slotCode,
+        temporary: 1
+      };
+      this.addLog(`发送AGV解绑指令: 位置=${slotCode}`);
+      try {
+        const res = await HttpUtilAGV.post(
+          '/rcs/rtas/api/robot/controller/matlabel/unbind',
+          params
+        );
+        if (res.code === 'SUCCESS') {
+          this.addLog(`AGV解绑成功: 位置${slotCode}`);
+          return true;
+        } else {
+          const errorMsg = res.message || '未知错误';
+          this.addLog(`AGV解绑失败: ${errorMsg}`);
+          this.addLog(`AGV解绑失败: ${errorMsg}`, 'alarm');
+          return false;
+        }
+      } catch (err) {
+        console.error('发送AGV解绑指令失败:', err);
+        this.addLog(`AGV解绑失败: ${err.message || '未知错误'}`);
+        this.addLog(`AGV解绑失败: ${err.message || '未知错误'}`, 'alarm');
+        return false;
       }
     },
     // 触发故障信号测试
