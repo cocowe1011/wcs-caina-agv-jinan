@@ -3122,7 +3122,7 @@ export default {
       //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       // );
       // return Date.now().toString();
-      组装入参;
+      // 组装入参;
       let params;
 
       // 特殊处理PF-FMR-COMMON-JH6任务类型
@@ -3604,7 +3604,7 @@ export default {
             const toSiteCode = 'z' + availablePosition.queueNum;
 
             const robotTaskCode = await this.sendAgvCommand(
-              'PF-FMR-COMMON-JH3', // 机械臂到空托盘区域的任务类型
+              'PF-FMR-COMMON-JH5', // 机械臂到空托盘区域的任务类型
               this.convertToStationId(fromSiteCode),
               toSiteCode
             );
@@ -3665,7 +3665,7 @@ export default {
             const toSiteCode = 'C' + availablePosition.queueNum;
 
             const robotTaskCode = await this.sendAgvCommand(
-              'PF-FMR-COMMON-JH3', // 机械臂到C区的任务类型
+              'PF-FMR-COMMON-JH2', // 机械臂到C区的任务类型
               this.convertToStationId(fromSiteCode),
               toSiteCode
             );
