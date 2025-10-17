@@ -348,6 +348,15 @@
                   AGV2-3队列
                 </button>
               </div>
+              <div class="marker-with-button" data-x="670" data-y="380">
+                <div class="pulse"></div>
+                <button
+                  class="marker-button"
+                  @click="handlePalletStorageClick('z', 'z队列-空托盘缓存区')"
+                >
+                  空托
+                </button>
+              </div>
               <!-- 机械臂 -->
               <div
                 v-for="arm in mechanicalArms"
@@ -357,7 +366,10 @@
                 :data-y="arm.y"
               >
                 <span
-                  class="arm-label"
+                  :class="[
+                    'arm-label',
+                    { 'has-pallet': armHasPallet(arm.name) }
+                  ]"
                   @click.stop="toggleArmPanel(arm.name)"
                   >{{ arm.name }}</span
                 >
@@ -377,14 +389,8 @@
                       <span>{{ arm.currentPallet || '暂无' }}</span>
                     </div>
                     <div class="data-panel-row">
-                      <span class="data-panel-label">状态：</span>
-                      <span :class="getStatusClass(arm.status)">
-                        <i
-                          :class="getStatusIcon(arm.status)"
-                          style="margin-right: 2px"
-                        ></i>
-                        {{ getStatusText(arm.status) }}
-                      </span>
+                      <span class="data-panel-label">产品描述：</span>
+                      <span>{{ arm.currentDesc || '暂无' }}</span>
                     </div>
                   </div>
                 </div>
@@ -394,7 +400,10 @@
               <div
                 v-for="(arrow, index) in thirdFloorArrows"
                 :key="'third-floor-' + index"
-                v-show="conveyorStatus.bit14 === '1'"
+                v-show="
+                  (arrow.line === 'A' && robotStatus.bit10 === '1') ||
+                  (arrow.line === 'B' && robotStatus.bit11 === '1')
+                "
                 class="marker-with-flow flow-item"
                 :data-x="arrow.x"
                 :data-y="arrow.y"
@@ -414,7 +423,10 @@
               <div
                 v-for="(arrow, index) in firstFloorArrows"
                 :key="'first-floor-' + index"
-                v-show="conveyorStatus.bit15 === '1'"
+                v-show="
+                  (arrow.line === 'A' && robotStatus2.bit10 === '1') ||
+                  (arrow.line === 'B' && robotStatus2.bit11 === '1')
+                "
                 class="marker-with-flow flow-item"
                 :data-x="arrow.x"
                 :data-y="arrow.y"
@@ -431,7 +443,7 @@
               </div>
 
               <!-- 1#机器人状态指示灯 -->
-              <div class="robot-status-indicators" data-x="1050" data-y="530">
+              <div class="robot-status-indicators" data-x="1330" data-y="730">
                 <div
                   class="robot-indicator"
                   @click="toggleRobotIndicator('robot1')"
@@ -440,18 +452,15 @@
                     class="status-light"
                     :class="{
                       'light-green': conveyorStatus.bit14 === '1',
-                      'light-yellow-flash': conveyorStatus.bit10 === '1',
-                      'light-off':
-                        conveyorStatus.bit14 === '0' &&
-                        conveyorStatus.bit10 === '0'
+                      'light-yellow-flash': conveyorStatus.bit14 === '0'
                     }"
                   ></div>
-                  <span class="robot-label">1#机器人</span>
+                  <span class="robot-label">1#</span>
                 </div>
               </div>
 
               <!-- 2#机器人状态指示灯 -->
-              <div class="robot-status-indicators" data-x="1050" data-y="980">
+              <div class="robot-status-indicators" data-x="1330" data-y="1100">
                 <div
                   class="robot-indicator"
                   @click="toggleRobotIndicator('robot2')"
@@ -460,13 +469,10 @@
                     class="status-light"
                     :class="{
                       'light-green': conveyorStatus.bit15 === '1',
-                      'light-yellow-flash': conveyorStatus.bit11 === '1',
-                      'light-off':
-                        conveyorStatus.bit15 === '0' &&
-                        conveyorStatus.bit11 === '0'
+                      'light-yellow-flash': conveyorStatus.bit15 === '0'
                     }"
                   ></div>
-                  <span class="robot-label">2#机器人</span>
+                  <span class="robot-label">2#</span>
                 </div>
               </div>
 
@@ -474,50 +480,62 @@
               <div class="control-button-group" data-x="50" data-y="1400">
                 <div class="control-panel-title">
                   <i class="el-icon-share" style="margin-right: 5px"></i
-                  >拆垛线控制操作
+                  >机械手控制操作
                 </div>
-                <el-button
-                  type="success"
-                  size="mini"
+                <button
+                  class="el-button el-button--success el-button--mini"
+                  :class="{ 'button-pressed': buttonStates['1-start'] }"
                   @mousedown="controlLinePress(1, 'start')"
                   @mouseup="controlLineRelease(1, 'start')"
-                  >1# 拆垛线启动</el-button
+                  @mouseleave="controlLineRelease(1, 'start')"
                 >
-                <el-button
-                  type="success"
-                  size="mini"
+                  {{ buttonStates['1-start'] ? '正在执行中' : '1# 机械手启动' }}
+                </button>
+                <button
+                  class="el-button el-button--success el-button--mini"
+                  :class="{ 'button-pressed': buttonStates['2-start'] }"
                   @mousedown="controlLinePress(2, 'start')"
                   @mouseup="controlLineRelease(2, 'start')"
-                  >2# 拆垛线启动</el-button
+                  @mouseleave="controlLineRelease(2, 'start')"
                 >
-                <el-button
-                  type="danger"
-                  size="mini"
+                  {{ buttonStates['2-start'] ? '正在执行中' : '2# 机械手启动' }}
+                </button>
+                <button
+                  class="el-button el-button--danger el-button--mini"
+                  :class="{ 'button-pressed': buttonStates['1-stop'] }"
                   @mousedown="controlLinePress(1, 'stop')"
                   @mouseup="controlLineRelease(1, 'stop')"
-                  >1# 拆垛线停止</el-button
+                  @mouseleave="controlLineRelease(1, 'stop')"
                 >
-                <el-button
-                  type="danger"
-                  size="mini"
+                  {{ buttonStates['1-stop'] ? '正在执行中' : '1# 机械手停止' }}
+                </button>
+                <button
+                  class="el-button el-button--danger el-button--mini"
+                  :class="{ 'button-pressed': buttonStates['2-stop'] }"
                   @mousedown="controlLinePress(2, 'stop')"
                   @mouseup="controlLineRelease(2, 'stop')"
-                  >2# 拆垛线停止</el-button
+                  @mouseleave="controlLineRelease(2, 'stop')"
                 >
-                <el-button
-                  type="warning"
-                  size="mini"
+                  {{ buttonStates['2-stop'] ? '正在执行中' : '2# 机械手停止' }}
+                </button>
+                <button
+                  class="el-button el-button--warning el-button--mini"
+                  :class="{ 'button-pressed': buttonStates['1-reset'] }"
                   @mousedown="controlLinePress(1, 'reset')"
                   @mouseup="controlLineRelease(1, 'reset')"
-                  >1# 拆垛线复位</el-button
+                  @mouseleave="controlLineRelease(1, 'reset')"
                 >
-                <el-button
-                  type="warning"
-                  size="mini"
+                  {{ buttonStates['1-reset'] ? '正在执行中' : '1# 机械手复位' }}
+                </button>
+                <button
+                  class="el-button el-button--warning el-button--mini"
+                  :class="{ 'button-pressed': buttonStates['2-reset'] }"
                   @mousedown="controlLinePress(2, 'reset')"
                   @mouseup="controlLineRelease(2, 'reset')"
-                  >2# 拆垛线复位</el-button
+                  @mouseleave="controlLineRelease(2, 'reset')"
                 >
+                  {{ buttonStates['2-reset'] ? '正在执行中' : '2# 机械手复位' }}
+                </button>
               </div>
             </div>
           </div>
@@ -613,6 +631,36 @@
                 type="warning"
                 style="margin-left: 15px"
                 >已在缓存区取货，正运往目的地</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '23'"
+                size="small"
+                style="margin-left: 15px"
+                >等待AGV取货（送往机械臂）</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '24'"
+                size="small"
+                type="warning"
+                style="margin-left: 15px"
+                >已在缓存区取货，正运往机械臂</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '16'"
+                size="small"
+                type="warning"
+                style="margin-left: 15px"
+                >空托盘区等待AGV取货</el-tag
+              ><el-tag
+                v-if="item.trayStatus === '17'"
+                size="small"
+                type="warning"
+                style="margin-left: 15px"
+                >空托盘区已取货，正运往C区</el-tag
+              >
+              <el-tag
+                v-if="item.trayStatus === '18'"
+                size="small"
+                type="warning"
+                style="margin-left: 15px"
+                >空托盘或者隔板已经送到目的地</el-tag
               ></span
             >
             <span v-else
@@ -686,7 +734,9 @@
                 <div class="storage-info">
                   <div class="storage-info-row">
                     <span class="label">托盘码：</span>
-                    <span class="value">{{ item.trayInfo }}</span>
+                    <span class="value"
+                      >{{ item.trayInfo }}{{ '（' + item.mudidi + '）' }}</span
+                    >
                   </div>
                   <div class="storage-info-row product-desc">
                     <span class="label">产品描述：</span>
@@ -894,6 +944,185 @@
                   :disabled="!selectedFaultSignal"
                 >
                   触发故障信号
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+
+        <!-- 机器人位置缺货信号测试 -->
+        <div class="test-section">
+          <h3>机器人位置缺货信号测试</h3>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="1#机器人">
+                <el-button-group>
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(1, 'a')"
+                    >A位置缺货</el-button
+                  >
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(1, 'b')"
+                    >B位置缺货</el-button
+                  >
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(1, 'd')"
+                    >D位置缺货</el-button
+                  >
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(1, 'e')"
+                    >E位置缺货</el-button
+                  >
+                </el-button-group>
+              </el-form-item>
+              <el-form-item label="2#机器人">
+                <el-button-group>
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(2, 'a')"
+                    >A位置缺货</el-button
+                  >
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(2, 'b')"
+                    >B位置缺货</el-button
+                  >
+                  <el-button
+                    type="warning"
+                    size="mini"
+                    @click="simulateRobotShortage(2, 'd')"
+                    >D位置缺货</el-button
+                  >
+                </el-button-group>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+
+        <!-- 机器人位置清理信号测试 -->
+        <div class="test-section">
+          <h3>机器人位置清理信号测试</h3>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="1#机器人">
+                <el-button-group>
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(1, 'a')"
+                    >A位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(1, 'b')"
+                    >B位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(1, 'd')"
+                    >D位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(1, 'e')"
+                    >E位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateDebrisClear(1, 'c')"
+                    >C位置杂物清理</el-button
+                  >
+                </el-button-group>
+              </el-form-item>
+              <el-form-item label="2#机器人">
+                <el-button-group>
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(2, 'a')"
+                    >A位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(2, 'b')"
+                    >B位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateEmptyPalletClear(2, 'd')"
+                    >D位置空托盘清理</el-button
+                  >
+                  <el-button
+                    type="info"
+                    size="mini"
+                    @click="simulateDebrisClear(2, 'c')"
+                    >C位置杂物清理</el-button
+                  >
+                </el-button-group>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+
+        <!-- 输送线信号测试 -->
+        <div class="test-section">
+          <h3>输送线信号测试</h3>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="三楼A线">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="toggleConveyorSignal('third', 'A')"
+                  :class="{ 'is-active': robotStatus.bit10 === '1' }"
+                >
+                  {{ robotStatus.bit10 === '1' ? '停止' : '启动' }}
+                </el-button>
+              </el-form-item>
+              <el-form-item label="三楼B线">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="toggleConveyorSignal('third', 'B')"
+                  :class="{ 'is-active': robotStatus.bit11 === '1' }"
+                >
+                  {{ robotStatus.bit11 === '1' ? '停止' : '启动' }}
+                </el-button>
+              </el-form-item>
+              <el-form-item label="一楼A线">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="toggleConveyorSignal('first', 'A')"
+                  :class="{ 'is-active': robotStatus2.bit10 === '1' }"
+                >
+                  {{ robotStatus2.bit10 === '1' ? '停止' : '启动' }}
+                </el-button>
+              </el-form-item>
+              <el-form-item label="一楼B线">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="toggleConveyorSignal('first', 'B')"
+                  :class="{ 'is-active': robotStatus2.bit11 === '1' }"
+                >
+                  {{ robotStatus2.bit11 === '1' ? '停止' : '启动' }}
                 </el-button>
               </el-form-item>
             </el-form>
@@ -1179,21 +1408,42 @@ export default {
     return {
       // 三楼流动箭头配置
       thirdFloorArrows: [
-        { x: 1065, y: 457, width: 230, rotation: 180, arrowCount: 7 }, // 三楼A
-        { x: 822, y: 635, width: 180, rotation: 95, arrowCount: 6 }, // 三楼A
-        { x: 1565, y: 575, width: 180, rotation: 0, arrowCount: 6 }, // 三楼B
-        { x: 2430, y: 606, width: 280, rotation: 0, arrowCount: 8 }, // 三楼B
-        { x: 2790, y: 777, width: 60, rotation: 5, arrowCount: 4 }, // 三楼B
-        { x: 2707, y: 685, width: 70, rotation: 85, arrowCount: 4 } // 三楼B
+        {
+          x: 1065,
+          y: 457,
+          width: 230,
+          rotation: 180,
+          arrowCount: 7,
+          line: 'A'
+        }, // 三楼A
+        { x: 822, y: 635, width: 180, rotation: 95, arrowCount: 6, line: 'A' }, // 三楼A
+        { x: 1565, y: 575, width: 180, rotation: 0, arrowCount: 6, line: 'B' }, // 三楼B
+        { x: 2430, y: 606, width: 280, rotation: 0, arrowCount: 8, line: 'B' }, // 三楼B
+        { x: 2790, y: 777, width: 60, rotation: 5, arrowCount: 4, line: 'B' }, // 三楼B
+        { x: 2707, y: 685, width: 70, rotation: 85, arrowCount: 4, line: 'B' } // 三楼B
       ],
       // 一楼流动箭头配置
       firstFloorArrows: [
-        { x: 1050, y: 1053, width: 220, rotation: 180, arrowCount: 7 }, // 一楼A
-        { x: 800, y: 990, width: 100, rotation: 225, arrowCount: 4 }, // 一楼A
-        { x: 2050, y: 658, width: 550, rotation: 0, arrowCount: 15 }, // 一楼B
-        { x: 1453, y: 841, width: 130, rotation: 270, arrowCount: 5 }, // 一楼B
-        { x: 2653, y: 790, width: 90, rotation: 90, arrowCount: 4 }, // 一楼B
-        { x: 2780, y: 926, width: 60, rotation: 0, arrowCount: 3 } // 一楼B
+        {
+          x: 1050,
+          y: 1053,
+          width: 220,
+          rotation: 180,
+          arrowCount: 7,
+          line: 'A'
+        }, // 一楼A
+        { x: 800, y: 990, width: 100, rotation: 225, arrowCount: 4, line: 'A' }, // 一楼A
+        { x: 2050, y: 658, width: 550, rotation: 0, arrowCount: 15, line: 'B' }, // 一楼B
+        {
+          x: 1453,
+          y: 841,
+          width: 130,
+          rotation: 270,
+          arrowCount: 5,
+          line: 'B'
+        }, // 一楼B
+        { x: 2653, y: 790, width: 90, rotation: 90, arrowCount: 4, line: 'B' }, // 一楼B
+        { x: 2780, y: 926, width: 60, rotation: 0, arrowCount: 3, line: 'B' } // 一楼B
       ],
       pollingTimerCtoAGV: null, // 定时器ID，用于C区到AGV2-2和AGV2-3的托盘移动轮询
       currentStorageTitle: '', // 新增：用于抽屉标题
@@ -1205,67 +1455,108 @@ export default {
         B: [],
         C: []
       },
+      // 机器人区域固定ID映射
+      robotAreaIdMap: {
+        a1: 602,
+        b1: 603,
+        c1: 604,
+        d1: 605,
+        e1: 606,
+        a2: 607,
+        b2: 608,
+        c2: 609,
+        d2: 610,
+        e2: 611
+      },
+      // 机械臂点位到站点ID的映射
+      stationIdMap: {
+        a1: '11',
+        b1: '12',
+        c1: '13',
+        d1: '14',
+        e1: '15',
+        a2: '21',
+        b2: '22',
+        c2: '23',
+        d2: '24'
+      },
       // 跟踪DBW102的当前值
       currentDBW102Value: 0,
+      // 按钮按下状态管理
+      buttonStates: {
+        '1-start': false,
+        '1-stop': false,
+        '1-reset': false,
+        '2-start': false,
+        '2-stop': false,
+        '2-reset': false
+      },
       mechanicalArms: [
         {
-          name: 'A1',
+          name: 'a1',
           x: 1300,
           y: 415,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'top-left'
         },
         {
-          name: 'B1',
+          name: 'b1',
           x: 1380,
           y: 415,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'top-right'
         },
         {
-          name: 'C1',
+          name: 'c1',
           x: 1220,
           y: 558,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'left'
         },
         {
-          name: 'D1',
+          name: 'd1',
           x: 1285,
           y: 625,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'bottom-left'
         },
         {
-          name: 'E1',
+          name: 'e1',
           x: 1363,
           y: 635,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'bottom-right'
         },
         {
-          name: 'A2',
+          name: 'a2',
           x: 1300,
           y: 853,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'top-left'
         },
         {
-          name: 'B2',
+          name: 'b2',
           x: 1387,
           y: 858,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'top-right'
         },
         {
-          name: 'C2',
+          name: 'c2',
           x: 1226,
           y: 930,
           status: 0,
@@ -1273,20 +1564,13 @@ export default {
           position: 'left'
         },
         {
-          name: 'D2',
+          name: 'd2',
           x: 1226,
           y: 1010,
           status: 0,
           currentPallet: null,
+          currentDesc: null,
           position: 'bottom-left'
-        },
-        {
-          name: 'E2',
-          x: 1335,
-          y: 1100,
-          status: 0,
-          currentPallet: null,
-          position: 'bottom'
         }
       ],
       testPanelVisible: false,
@@ -1513,8 +1797,8 @@ export default {
       this.robotStatus2.bit7 = getBit(word6, 15);
       this.robotStatus2.bit8 = getBit(word6, 0);
       this.robotStatus2.bit9 = getBit(word6, 1);
-      this.robotStatus2.bit10 = getBit(word6, 2);
-      this.robotStatus2.bit11 = getBit(word6, 3);
+      this.robotStatus2.bit10 = getBit(word6, 2); // 值为1时，去一楼灌装车间A输送线启动中
+      this.robotStatus2.bit11 = getBit(word6, 3); // 值为1时，去一楼灌装车间B输送线启动中
 
       // AGV调度条件
       let word8 = this.convertToWord(values.DBW8);
@@ -1647,6 +1931,150 @@ export default {
       handler(newVal) {
         if (newVal === '1') {
           this.addLog('去一楼灌装车间B输送线故障信号', 'alarm');
+        }
+      }
+    },
+    // 监听1#机器人A位置缺货
+    'robotStatus.bit0': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人A位置缺货');
+          await this.handleRobotShortage(1, 'a');
+        }
+      }
+    },
+    // 监听1#机器人B位置缺货
+    'robotStatus.bit2': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人B位置缺货');
+          await this.handleRobotShortage(1, 'b');
+        }
+      }
+    },
+    // 监听1#机器人D位置缺货
+    'robotStatus.bit6': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人D位置缺货');
+          await this.handleRobotShortage(1, 'd');
+        }
+      }
+    },
+    // 监听1#机器人E位置缺货
+    'robotStatus.bit8': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人E位置缺货');
+          await this.handleRobotShortage(1, 'e');
+        }
+      }
+    },
+    // 监听2#机器人A位置缺货
+    'robotStatus2.bit0': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人A位置缺货');
+          await this.handleRobotShortage(2, 'a');
+        }
+      }
+    },
+    // 监听2#机器人B位置缺货
+    'robotStatus2.bit2': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人B位置缺货');
+          await this.handleRobotShortage(2, 'b');
+        }
+      }
+    },
+    // 监听2#机器人D位置缺货
+    'robotStatus2.bit6': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人D位置缺货');
+          await this.handleRobotShortage(2, 'd');
+        }
+      }
+    },
+    // 监听1#机器人A位置空托盘清理信号
+    'robotStatus.bit1': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人A位置需要清理空托盘');
+          await this.handleEmptyPalletClear('a1', 1);
+        }
+      }
+    },
+    // 监听1#机器人B位置空托盘清理信号
+    'robotStatus.bit3': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人B位置需要清理空托盘');
+          await this.handleEmptyPalletClear('b1', 1);
+        }
+      }
+    },
+    // 监听1#机器人D位置空托盘清理信号
+    'robotStatus.bit7': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人D位置需要清理空托盘');
+          await this.handleEmptyPalletClear('d1', 1);
+        }
+      }
+    },
+    // 监听1#机器人E位置空托盘清理信号
+    'robotStatus.bit9': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人E位置需要清理空托盘');
+          await this.handleEmptyPalletClear('e1', 1);
+        }
+      }
+    },
+    // 监听2#机器人A位置空托盘清理信号
+    'robotStatus2.bit1': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人A位置需要清理空托盘');
+          await this.handleEmptyPalletClear('a2', 2);
+        }
+      }
+    },
+    // 监听2#机器人B位置空托盘清理信号
+    'robotStatus2.bit3': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人B位置需要清理空托盘');
+          await this.handleEmptyPalletClear('b2', 2);
+        }
+      }
+    },
+    // 监听2#机器人D位置空托盘清理信号
+    'robotStatus2.bit7': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人D位置需要清理空托盘');
+          await this.handleEmptyPalletClear('d2', 2);
+        }
+      }
+    },
+    // 监听1#机器人C位置杂物托盘清理信号
+    'robotStatus.bit5': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到1#机器人C位置需要清理杂物托盘');
+          await this.handleDebrisClear('c1', 1);
+        }
+      }
+    },
+    // 监听2#机器人C位置杂物托盘清理信号
+    'robotStatus2.bit5': {
+      async handler(newVal, oldVal) {
+        if (newVal === '1' && oldVal === '0') {
+          this.addLog('检测到2#机器人C位置需要清理杂物托盘');
+          await this.handleDebrisClear('c2', 2);
         }
       }
     }
@@ -1950,6 +2378,49 @@ export default {
     showTestPanel() {
       this.testPanelVisible = true;
     },
+    // 切换输送线信号
+    toggleConveyorSignal(floor, line) {
+      const floorName = floor === 'third' ? '三楼' : '一楼';
+      const lineName = line === 'A' ? 'A线' : 'B线';
+
+      if (floor === 'third') {
+        if (line === 'A') {
+          // 切换三楼A线状态
+          this.robotStatus.bit10 = this.robotStatus.bit10 === '1' ? '0' : '1';
+          this.addLog(
+            `${floorName}${lineName}输送线状态切换为：${
+              this.robotStatus.bit10 === '1' ? '启动中' : '停止'
+            }`
+          );
+        } else {
+          // 切换三楼B线状态
+          this.robotStatus.bit11 = this.robotStatus.bit11 === '1' ? '0' : '1';
+          this.addLog(
+            `${floorName}${lineName}输送线状态切换为：${
+              this.robotStatus.bit11 === '1' ? '启动中' : '停止'
+            }`
+          );
+        }
+      } else {
+        if (line === 'A') {
+          // 切换一楼A线状态
+          this.robotStatus2.bit10 = this.robotStatus2.bit10 === '1' ? '0' : '1';
+          this.addLog(
+            `${floorName}${lineName}输送线状态切换为：${
+              this.robotStatus2.bit10 === '1' ? '启动中' : '停止'
+            }`
+          );
+        } else {
+          // 切换一楼B线状态
+          this.robotStatus2.bit11 = this.robotStatus2.bit11 === '1' ? '0' : '1';
+          this.addLog(
+            `${floorName}${lineName}输送线状态切换为：${
+              this.robotStatus2.bit11 === '1' ? '启动中' : '停止'
+            }`
+          );
+        }
+      }
+    },
     testDatabase() {
       if (!this.twoEightHundredPalletTestCode) {
         this.$message.warning('请填写完整的测试托盘码');
@@ -2014,6 +2485,7 @@ export default {
       // 如果wmsInfo.mudidi为'2800-1'，进入C队列
       // 如果wmsInfo.mudidi为'2800-2'，进入A队列
       // 如果wmsInfo.mudidi为'2800-3'，进入B队列
+      // 如果wmsInfo.mudidi为'2800-2801'、'2800-2802'、'2800-2803'、'2800-2804'，进入A队列
       // 如果没有上面，则return 并输出日志
       let queueName = '';
       if (wmsInfo.mudidi === '2800-1') {
@@ -2022,6 +2494,13 @@ export default {
         queueName = 'A';
       } else if (wmsInfo.mudidi === '2800-3') {
         queueName = 'B';
+      } else if (
+        wmsInfo.mudidi === '2800-2801' ||
+        wmsInfo.mudidi === '2800-2802' ||
+        wmsInfo.mudidi === '2800-2803' ||
+        wmsInfo.mudidi === '2800-2804'
+      ) {
+        queueName = 'A';
       } else {
         this.addLog(
           `托盘入库失败：${trayCode}，目的地为${wmsInfo.mudidi}，不支持的入库目的地`
@@ -2054,7 +2533,8 @@ export default {
                   trayInfo: trayCode,
                   trayStatus: '0',
                   robotTaskCode,
-                  trayInfoAdd: wmsInfo.descrC
+                  trayInfoAdd: wmsInfo.descrC,
+                  mudidi: wmsInfo.mudidi
                 };
                 HttpUtil.post('/queue_info/update', param)
                   .then(() => {
@@ -2089,6 +2569,141 @@ export default {
           console.error('查询C队列托盘情况失败:', err);
         });
     },
+    // 处理机器人缺货自动调度
+    async handleRobotShortage(robotNum, position) {
+      try {
+        // 目标机械臂位置
+        let targetPosition = position + robotNum;
+
+        // 检查机械手队列是否已锁定
+        const robotQueueRes = await HttpUtil.post(
+          '/queue_info/queryQueueList',
+          {
+            id: this.robotAreaIdMap[targetPosition]
+          }
+        );
+
+        if (robotQueueRes.data && robotQueueRes.data.length > 0) {
+          const robotQueue = robotQueueRes.data[0];
+          if (robotQueue.isLock === '1') {
+            this.addLog(
+              `${robotNum}#机器人${position.toUpperCase()}位置队列已锁定，跳过缺货处理`
+            );
+            return;
+          }
+        }
+
+        // 根据目的地与机械臂位置的对照关系选择允许的目的地
+        const destinationByArm = {
+          a2: ['2800-2801'],
+          b2: ['2800-2801'],
+          d2: ['2800-2802'],
+          a1: ['2800-2803'],
+          b1: ['2800-2803'],
+          d1: ['2800-2804'],
+          e1: ['2800-2804']
+        };
+        const allowedDestinations = destinationByArm[targetPosition] || [];
+
+        this.addLog(
+          `开始为${robotNum}#机器人${position.toUpperCase()}位置（${targetPosition}）查找目的地为${
+            allowedDestinations.join('或') || '无匹配目的地'
+          }且状态为2的托盘`
+        );
+
+        // 查询A队列的所有托盘
+        const res = await HttpUtil.post('/queue_info/queryQueueList', {
+          queueName: 'A'
+        });
+
+        if (res.data && res.data.length > 0) {
+          // 查找目的地匹配且状态为'2'（已送至2楼缓存区）的托盘
+          const matchedPallet = res.data.find(
+            (item) =>
+              item.trayInfo &&
+              item.trayInfo !== '' &&
+              item.trayStatus === '2' &&
+              allowedDestinations.includes(item.mudidi)
+          );
+
+          if (matchedPallet) {
+            this.addLog(
+              `找到匹配托盘：${matchedPallet.trayInfo}，目的地：${matchedPallet.mudidi}，准备发送AGV送货任务`
+            );
+
+            this.addLog(
+              `AGV目标位置：${targetPosition}（${robotNum}#机器人${position.toUpperCase()}位置）`
+            );
+
+            // 获取目标机器人区域的固定ID
+            const targetId = this.robotAreaIdMap[targetPosition];
+
+            // 发送AGV送货指令
+            const robotTaskCode = await this.sendAgvCommand(
+              'PF-FMR-COMMON-JH2',
+              matchedPallet.queueName + matchedPallet.queueNum,
+              this.convertToStationId(targetPosition)
+            );
+
+            if (robotTaskCode !== '') {
+              // 同时更新托盘状态和锁定机械手队列
+              const params = [
+                {
+                  id: matchedPallet.id,
+                  trayStatus: '23',
+                  robotTaskCode,
+                  targetPosition: targetPosition,
+                  targetId: targetId // 目的地的id
+                },
+                {
+                  id: targetId, // 给目标机械手位置上锁
+                  isLock: '1'
+                }
+              ];
+
+              await HttpUtil.post('/queue_info/updateByList', params)
+                .then(() => {
+                  this.addLog(
+                    `已为${robotNum}#机器人${position.toUpperCase()}位置发送AGV送货任务，托盘：${
+                      matchedPallet.trayInfo
+                    }，并锁定机械手队列`
+                  );
+                  this.$message.success(
+                    `已为${robotNum}#机器人${position.toUpperCase()}位置自动调度托盘${
+                      matchedPallet.trayInfo
+                    }`
+                  );
+                })
+                .catch((err) => {
+                  this.addLog(
+                    `为${robotNum}#机器人${position.toUpperCase()}位置发送AGV送货任务失败：${
+                      err.message
+                    }`
+                  );
+                });
+            }
+          } else {
+            this.addLog(
+              `A队列中未找到目的地为${allowedDestinations.join('或')}的可用托盘`
+            );
+            this.$message.warning(
+              `${robotNum}#机器人${position.toUpperCase()}位置缺货，但A队列中无匹配托盘`
+            );
+          }
+        } else {
+          this.addLog(
+            `A队列为空，无法为${robotNum}#机器人${position.toUpperCase()}位置补货`
+          );
+        }
+      } catch (err) {
+        console.error('处理机器人缺货失败:', err);
+        this.addLog(
+          `处理${robotNum}#机器人${position.toUpperCase()}位置缺货失败：${
+            err.message || '未知错误'
+          }`
+        );
+      }
+    },
     toggleArmPanel(armName) {
       const index = this.visibleArmPanels.indexOf(armName);
       if (index > -1) {
@@ -2098,6 +2713,12 @@ export default {
         // 未显示则添加到显示列表
         this.visibleArmPanels.push(armName);
       }
+    },
+    armHasPallet(armName) {
+      const arm = this.mechanicalArms.find(
+        (m) => m.name.toLowerCase() === armName.toLowerCase()
+      );
+      return !!(arm && arm.currentPallet);
     },
     switchStorageArea(area) {
       this.currentStorageArea = area;
@@ -2431,8 +3052,8 @@ export default {
                         id: resQiDian.data[0].id,
                         trayStatus: '20',
                         robotTaskCode,
-                        targetPosition: toSiteCode,
-                        targetId: res.data[0].id
+                        targetPosition: toSiteCode, // 目的地
+                        targetId: res.data[0].id // 目的地的id
                       },
                       {
                         id: res.data[0].id,
@@ -2486,26 +3107,55 @@ export default {
         this.addLog('AGV调度已停止(循环)');
       }
     },
+    // 将机械臂点位转换为站点ID的辅助方法
+    convertToStationId(siteCode) {
+      // 检查是否是机械臂点位（a1, b1, c1, d1, e1, a2, b2, c2, d2）
+      const lowerSiteCode = siteCode.toLowerCase();
+      if (this.stationIdMap[lowerSiteCode]) {
+        return this.stationIdMap[lowerSiteCode];
+      }
+      return siteCode; // 如果不是机械臂点位，返回原始值
+    },
     async sendAgvCommand(taskType, fromSiteCode, toSiteCode) {
       // 测试用，返回当前时间戳
       // this.addLog(
       //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       // );
       // return Date.now().toString();
-      // 组装入参
-      const params = {
-        taskType: taskType,
-        targetRoute: [
-          {
-            type: 'SITE',
-            code: fromSiteCode
-          },
-          {
-            type: 'SITE',
-            code: toSiteCode
-          }
-        ]
-      };
+      组装入参;
+      let params;
+
+      // 特殊处理PF-FMR-COMMON-JH6任务类型
+      if (taskType === 'PF-FMR-COMMON-JH6') {
+        params = {
+          taskType: taskType,
+          targetRoute: [
+            {
+              type: 'MIX_CONDITION',
+              code: `[{"type":"SITE","code":"${fromSiteCode}"},{"type":"PILE_COUNT","code":"8"}]`
+            },
+            {
+              type: 'SITE',
+              code: toSiteCode
+            }
+          ]
+        };
+      } else {
+        // 其他任务类型的标准格式
+        params = {
+          taskType: taskType,
+          targetRoute: [
+            {
+              type: 'SITE',
+              code: fromSiteCode
+            },
+            {
+              type: 'SITE',
+              code: toSiteCode
+            }
+          ]
+        };
+      }
       this.addLog(
         `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       );
@@ -2570,6 +3220,31 @@ export default {
     pollForPalletsToMove() {
       HttpUtil.post('/queue_info/queryQueueList', {}).then((res) => {
         if (res && res.data.length > 0) {
+          // 同步各机械臂位置信息（a1、b1、d1、e1、a2、b2、d2：取该队列第一个有托盘的记录）
+          const armAreas = ['a1', 'b1', 'd1', 'e1', 'a2', 'b2', 'd2'];
+          armAreas.forEach((area) => {
+            const list = res.data
+              .filter((x) => x.queueName + x.queueNum == area)
+              .sort((a, b) => (a.queueNum || 0) - (b.queueNum || 0));
+            const firstWithPallet = list.find(
+              (x) => x.trayInfo && x.trayInfo !== ''
+            );
+            const idx = this.mechanicalArms.findIndex(
+              (m) => m.name.toLowerCase() == area
+            );
+            if (idx !== -1) {
+              this.$set(
+                this.mechanicalArms[idx],
+                'currentPallet',
+                firstWithPallet ? firstWithPallet.trayInfo : null
+              );
+              this.$set(
+                this.mechanicalArms[idx],
+                'currentDesc',
+                firstWithPallet ? firstWithPallet.trayInfoAdd : null
+              );
+            }
+          });
           // 过滤出C队列状态为5的托盘
           const status5PalletsC = res.data.filter(
             (item) => item.trayStatus === '5' && item.queueName === 'C'
@@ -2598,6 +3273,18 @@ export default {
           if (status7Pallets3.length > 0) {
             this.deletePalletsWithStatus7(status7Pallets3, 'AGV2-3');
           }
+
+          // 处理机械臂队列状态为25的托盘（已送至机械臂目的地，需发送送货完成信号）
+          this.handleStatus25RobotPallets(res.data);
+
+          // 处理z队列状态为13的托盘（已送至空托盘区域，需发送清理完成信号）
+          this.handleStatus13EmptyPallets(res.data);
+
+          // 处理C队列状态为18的托盘（空托盘/杂物已送至C区，需发送送货完成信号）
+          this.handleStatus18EmptyDebrisPallets(res.data);
+
+          // 处理z队列状态为15的托盘（空托盘区域集满，需发送到C区）
+          this.handleFullEmptyPalletArea(res.data);
         }
       });
     },
@@ -2637,6 +3324,391 @@ export default {
           this.addLog(`托盘${pallets[0].trayInfo}删除失败，请检查。${err}`);
         });
     },
+
+    // 处理机械臂队列状态为25的托盘（已送至机械臂目的地，发送送货完成信号）
+    handleStatus25RobotPallets(allData) {
+      // 定义机械臂队列与PLC送货完成命令的映射关系
+      const robotMapping = {
+        a1: { robot: 1, completeCmd: 'DBW102_BIT0' },
+        b1: { robot: 1, completeCmd: 'DBW102_BIT2' },
+        d1: { robot: 1, completeCmd: 'DBW102_BIT6' },
+        e1: { robot: 1, completeCmd: 'DBW102_BIT8' },
+        a2: { robot: 2, completeCmd: 'DBW104_BIT0' },
+        b2: { robot: 2, completeCmd: 'DBW104_BIT2' },
+        d2: { robot: 2, completeCmd: 'DBW104_BIT6' },
+        e2: { robot: 2, completeCmd: 'DBW104_BIT8' }
+      };
+
+      // 过滤出状态为25的机械臂队列托盘（只包括a/b/d/e机械手位置）
+      const status25Pallets = allData.filter(
+        (item) =>
+          item.trayStatus === '25' &&
+          robotMapping[item.queueName.toLowerCase() + item.queueNum]
+      );
+
+      status25Pallets.forEach((pallet) => {
+        const queueKey = pallet.queueName.toLowerCase() + pallet.queueNum;
+        const mapping = robotMapping[queueKey];
+
+        if (mapping) {
+          // 发送送货完成信号，持续2秒
+          ipcRenderer.send('writeSingleValueToPLC', mapping.completeCmd, true);
+          setTimeout(() => {
+            ipcRenderer.send(
+              'writeSingleValueToPLC',
+              mapping.completeCmd,
+              false
+            );
+          }, 2000);
+
+          this.addLog(
+            `检测到托盘${pallet.trayInfo}在${pallet.queueName}${pallet.queueNum}位置送货完成（状态25），已发送机器人${mapping.robot}送货完成信号。`
+          );
+
+          // 更新托盘状态为10（已发送送货完成指令）并解除机械手队列锁定状态
+          const param = {
+            id: pallet.id,
+            trayStatus: '10',
+            isLock: ''
+          };
+          HttpUtil.post('/queue_info/update', param)
+            .then((res) => {
+              if (res.data == 1) {
+                this.addLog(
+                  `托盘${pallet.trayInfo}状态已更新为10（已发送送货完成指令），机械手队列${pallet.queueName}${pallet.queueNum}锁定状态已解除。`
+                );
+              }
+            })
+            .catch((err) => {
+              this.addLog(`托盘${pallet.trayInfo}状态更新失败：${err}`);
+            });
+        }
+      });
+    },
+
+    // 处理C队列状态为18的托盘（空托盘/杂物已送至C区，发送清理完成信号）
+    handleStatus18EmptyDebrisPallets(allData) {
+      // 定义机械臂队列与PLC清理完成命令的映射关系
+      const clearCompleteMapping = {
+        a1: { robot: 1, clearCmd: 'DBW102_BIT1', type: '空托盘' }, // A空托盘清理完成
+        b1: { robot: 1, clearCmd: 'DBW102_BIT3', type: '空托盘' }, // B空托盘清理完成
+        c1: { robot: 1, clearCmd: 'DBW102_BIT5', type: '杂物托盘' }, // C杂物托盘清理完成
+        d1: { robot: 1, clearCmd: 'DBW102_BIT7', type: '空托盘' }, // D空托盘清理完成
+        e1: { robot: 1, clearCmd: 'DBW102_BIT9', type: '空托盘' }, // E空托盘清理完成
+        a2: { robot: 2, clearCmd: 'DBW104_BIT1', type: '空托盘' }, // A空托盘清理完成
+        b2: { robot: 2, clearCmd: 'DBW104_BIT3', type: '空托盘' }, // B空托盘清理完成
+        c2: { robot: 2, clearCmd: 'DBW104_BIT5', type: '杂物托盘' }, // C杂物托盘清理完成
+        d2: { robot: 2, clearCmd: 'DBW104_BIT7', type: '空托盘' }, // D空托盘清理完成
+        e2: { robot: 2, clearCmd: 'DBW104_BIT9', type: '空托盘' } // E空托盘清理完成
+      };
+
+      // 过滤出C队列状态为18的托盘
+      const status18Pallets = allData.filter(
+        (item) => item.trayStatus === '18' && item.queueName === 'C'
+      );
+
+      status18Pallets.forEach((pallet) => {
+        // 根据targetPosition确定来源位置，发送清理完成信号
+        const targetPosition = pallet.targetPosition;
+
+        if (targetPosition) {
+          // 从targetPosition解析出机械手位置（例如：C1 -> c1, z1的targetPosition会保存原始a1/b1等）
+          const mapping = clearCompleteMapping[targetPosition.toLowerCase()];
+
+          if (mapping) {
+            // 发送清理完成信号，持续2秒
+            ipcRenderer.send('writeSingleValueToPLC', mapping.clearCmd, true);
+            setTimeout(() => {
+              ipcRenderer.send(
+                'writeSingleValueToPLC',
+                mapping.clearCmd,
+                false
+              );
+            }, 2000);
+
+            this.addLog(
+              `检测到托盘${pallet.trayInfo}在C${pallet.queueNum}位置已送达（状态18），来源${targetPosition}，已发送机器人${mapping.robot}${mapping.type}清理完成信号。`
+            );
+
+            // 更新托盘状态为14（已发送清理完成指令）
+            const param = {
+              id: pallet.id,
+              trayStatus: '14'
+            };
+            HttpUtil.post('/queue_info/update', param)
+              .then((res) => {
+                if (res.data == 1) {
+                  this.addLog(
+                    `托盘${pallet.trayInfo}状态已更新为14（已发送${mapping.type}清理完成指令）。`
+                  );
+                }
+              })
+              .catch((err) => {
+                this.addLog(`托盘${pallet.trayInfo}状态更新失败：${err}`);
+              });
+          }
+        }
+      });
+    },
+
+    // 处理z队列状态为13的托盘（已送至空托盘区域，发送清理完成信号）
+    handleStatus13EmptyPallets(allData) {
+      // 过滤出z队列状态为13的托盘
+      const status13Pallets = allData.filter(
+        (item) => item.trayStatus === '13' && item.queueName === 'z'
+      );
+
+      status13Pallets.forEach((pallet) => {
+        // 根据targetPosition确定来源位置，发送清理完成信号
+        const targetPosition = pallet.targetPosition; // 例如：A1, B1, D1, E1, A2, B2, D2, E2
+
+        if (targetPosition) {
+          // 定义清理完成信号映射
+          const clearCompleteMapping = {
+            A1: 'DBW102_BIT1',
+            B1: 'DBW102_BIT3',
+            D1: 'DBW102_BIT7',
+            E1: 'DBW102_BIT9',
+            A2: 'DBW104_BIT1',
+            B2: 'DBW104_BIT3',
+            D2: 'DBW104_BIT7',
+            E2: 'DBW104_BIT9'
+          };
+
+          const clearCmd = clearCompleteMapping[targetPosition];
+
+          if (clearCmd) {
+            // 发送清理完成信号，持续2秒
+            ipcRenderer.send('writeSingleValueToPLC', clearCmd, true);
+            setTimeout(() => {
+              ipcRenderer.send('writeSingleValueToPLC', clearCmd, false);
+            }, 2000);
+
+            this.addLog(
+              `检测到z${pallet.queueNum}位置空托盘已送达（状态13），来源${targetPosition}，已发送清理完成信号。`
+            );
+
+            // 更新托盘状态为14（已经给PLC发送过清理托盘完成命令）
+            const param = {
+              id: pallet.id,
+              trayStatus: '14'
+            };
+            HttpUtil.post('/queue_info/update', param)
+              .then((res) => {
+                if (res.data == 1) {
+                  this.addLog(
+                    `z${pallet.queueNum}状态已更新为14（已发送清理完成指令）。`
+                  );
+                }
+              })
+              .catch((err) => {
+                this.addLog(`z${pallet.queueNum}状态更新失败：${err}`);
+              });
+          }
+        }
+      });
+    },
+
+    // 处理空托盘区域集满（状态15），发送到C区
+    async handleFullEmptyPalletArea(allData) {
+      // 过滤出z队列状态为15的托盘
+      const status15Pallets = allData.filter(
+        (item) => item.trayStatus === '15' && item.queueName === 'z'
+      );
+
+      for (const pallet of status15Pallets) {
+        try {
+          // 查询C队列，找到第一个空闲位置
+          const res = await HttpUtil.post('/queue_info/queryQueueList', {
+            queueName: 'C'
+          });
+
+          if (res.code === '200' && res.data && res.data.length > 0) {
+            // 找到第一个空闲位置（trayStatus为空或""）
+            const availablePosition = res.data.find(
+              (item) => !item.trayStatus || item.trayStatus === ''
+            );
+
+            if (availablePosition) {
+              // 发送AGV指令：从z队列到C区
+              const fromSiteCode = 'z' + pallet.queueNum;
+              const toSiteCode = 'C' + availablePosition.queueNum;
+
+              const robotTaskCode = await this.sendAgvCommand(
+                'PF-FMR-COMMON-JH6', // 空托盘区到C区的任务类型
+                fromSiteCode,
+                toSiteCode
+              );
+
+              if (robotTaskCode) {
+                // 同时更新z队列位置状态和锁定C区目标位置
+                const params = [
+                  {
+                    id: pallet.id,
+                    trayStatus: '16',
+                    robotTaskCode: robotTaskCode,
+                    targetPosition: toSiteCode, // 目的地
+                    targetId: availablePosition.id // 目的地的id
+                  },
+                  {
+                    id: availablePosition.id, // 给目标C区位置上锁
+                    isLock: '1'
+                  }
+                ];
+
+                HttpUtil.post('/queue_info/updateByList', params)
+                  .then((updateRes) => {
+                    if (updateRes.data == 1) {
+                      this.addLog(
+                        `检测到z${pallet.queueNum}位置空托盘区域集满（状态15），已发送AGV指令到C${availablePosition.queueNum}位置，状态更新为16，并锁定目标位置。`
+                      );
+                    }
+                  })
+                  .catch((err) => {
+                    this.addLog(`z队列状态更新失败：${err}`);
+                  });
+              }
+            } else {
+              this.addLog(
+                `C队列所有位置都已占用，无法处理z${pallet.queueNum}空托盘区域集满。`
+              );
+            }
+          }
+        } catch (err) {
+          this.addLog(`处理z${pallet.queueNum}空托盘区域集满失败：${err}`);
+        }
+      }
+    },
+
+    // 处理空托盘清理
+    async handleEmptyPalletClear(position, robotNum) {
+      // 机械手→z区：更新源机械手位置记录
+      try {
+        // 获取源位置（机械臂位置）的固定ID
+        const sourceId = this.robotAreaIdMap[position.toLowerCase()];
+
+        // 查询z队列，找到第一个不是状态15（集满）的位置
+        const res = await HttpUtil.post('/queue_info/queryQueueList', {
+          queueName: 'z'
+        });
+
+        if (res.code === '200' && res.data && res.data.length > 0) {
+          // 找到第一个状态不是15的位置
+          const availablePosition = res.data.find(
+            (item) => item.trayStatus !== '15'
+          );
+
+          if (availablePosition) {
+            // 发送AGV指令：从机械臂位置到z队列位置
+            const fromSiteCode = position.toUpperCase(); // 例如：A1
+            const toSiteCode = 'z' + availablePosition.queueNum;
+
+            const robotTaskCode = await this.sendAgvCommand(
+              'PF-FMR-COMMON-JH3', // 机械臂到空托盘区域的任务类型
+              this.convertToStationId(fromSiteCode),
+              toSiteCode
+            );
+
+            if (robotTaskCode) {
+              // 更新源机械手位置记录，状态为11（等待AGV取货）
+              const param = {
+                id: sourceId, // 源机械手位置的id
+                trayStatus: '11',
+                robotTaskCode: robotTaskCode,
+                targetPosition: toSiteCode, // 目的地队列名
+                targetId: availablePosition.id, // 目的地的id
+                trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置空托盘`
+              };
+
+              HttpUtil.post('/queue_info/update', param)
+                .then((updateRes) => {
+                  if (updateRes.data == 1) {
+                    this.addLog(
+                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理空托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11。`
+                    );
+                  }
+                })
+                .catch((err) => {
+                  this.addLog(`机械手位置状态更新失败：${err}`);
+                });
+            }
+          } else {
+            this.addLog(`z队列所有位置都已集满（状态15），无法清理空托盘。`);
+          }
+        }
+      } catch (err) {
+        this.addLog(`查询z队列失败：${err}`);
+      }
+    },
+
+    // 处理杂物托盘清理（C位置）
+    async handleDebrisClear(position, robotNum) {
+      // 机械手C→C区：更新源机械手C位置记录
+      try {
+        // 获取源位置（机械臂C位置）的固定ID
+        const sourceId = this.robotAreaIdMap[position.toLowerCase()];
+
+        // 查询C队列，找到第一个空闲位置
+        const res = await HttpUtil.post('/queue_info/queryQueueList', {
+          queueName: 'C'
+        });
+
+        if (res.code === '200' && res.data && res.data.length > 0) {
+          // 找到第一个空闲位置（trayStatus为空或""）
+          const availablePosition = res.data.find(
+            (item) => !item.trayStatus || item.trayStatus === ''
+          );
+
+          if (availablePosition) {
+            // 发送AGV指令：从C位置到C区
+            const fromSiteCode = position.toUpperCase(); // 例如：C1, C2
+            const toSiteCode = 'C' + availablePosition.queueNum;
+
+            const robotTaskCode = await this.sendAgvCommand(
+              'PF-FMR-COMMON-JH3', // 机械臂到C区的任务类型
+              this.convertToStationId(fromSiteCode),
+              toSiteCode
+            );
+
+            if (robotTaskCode) {
+              // 同时更新源机械手C位置记录和锁定C区目标位置
+              const params = [
+                {
+                  id: sourceId, // 源机械手C位置的id
+                  trayInfo: robotTaskCode, // 使用任务号作为托盘信息
+                  trayStatus: '11',
+                  robotTaskCode: robotTaskCode,
+                  targetPosition: toSiteCode, // 目的地队列名
+                  targetId: availablePosition.id, // 目的地的id
+                  trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置杂物托盘`
+                },
+                {
+                  id: availablePosition.id, // 给目标C区位置上锁
+                  isLock: '1'
+                }
+              ];
+
+              HttpUtil.post('/queue_info/updateByList', params)
+                .then((updateRes) => {
+                  if (updateRes.data == 1) {
+                    this.addLog(
+                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理杂物托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11，并锁定目标位置。`
+                    );
+                  }
+                })
+                .catch((err) => {
+                  this.addLog(`机械手位置状态更新失败：${err}`);
+                });
+            }
+          } else {
+            this.addLog(`C队列所有位置都已占用，无法清理杂物托盘。`);
+          }
+        }
+      } catch (err) {
+        this.addLog(`查询C队列失败：${err}`);
+      }
+    },
+
     // 将托盘插入AGV2-2/AGV2-3队列
     insertPalletToAGV(pallets, queueName) {
       // pallets按照元素updateTime正序排序，pallets长度是大于等于一的
@@ -2970,11 +4042,24 @@ export default {
       HttpUtil.post('/queue_info/queryQueueList', {})
         .then((res) => {
           if (res.data && Array.isArray(res.data)) {
-            // 筛选出trayStatus为'0'、'1'、'3'、'4'、'6'、'7'状态的数据
+            // 筛选出运行中的任务状态
             const runningTasks = res.data.filter((item) =>
-              ['0', '1', '20', '21', '3', '4', '6', '7'].includes(
-                item.trayStatus
-              )
+              [
+                '0',
+                '1',
+                '20',
+                '21',
+                '3',
+                '4',
+                '6',
+                '7',
+                '23',
+                '24',
+                '11',
+                '12',
+                '16',
+                '17'
+              ].includes(item.trayStatus)
             );
 
             // 根据楼层分类
@@ -2984,7 +4069,20 @@ export default {
                 ['6', '7'].includes(item.trayStatus)
             );
             const floor2Tasks = runningTasks.filter((item) =>
-              ['0', '1', '20', '21', '3', '4'].includes(item.trayStatus)
+              [
+                '0',
+                '1',
+                '20',
+                '21',
+                '3',
+                '4',
+                '23',
+                '24',
+                '11',
+                '12',
+                '16',
+                '17'
+              ].includes(item.trayStatus)
             );
             const floor3Tasks = runningTasks.filter(
               (item) =>
@@ -3079,7 +4177,13 @@ export default {
         7:
           row.queueName === 'AGV2-2'
             ? 'AGV已在一楼AGV1-1取货，正运往目的地'
-            : 'AGV已在三楼AGV3-1取货，正运往目的地'
+            : 'AGV已在三楼AGV3-1取货，正运往目的地',
+        23: '在缓存区等待AGV取货（送往机械臂）',
+        24: '已在缓存区取货，正运往机械臂',
+        11: '在机械臂位置等待AGV取货',
+        12: 'AGV已在机械臂位置取货，正运往目的地',
+        16: '在空托盘区等待AGV取货',
+        17: 'AGV已在空托盘区取货，正运往C区'
       };
 
       return statusMap[row.trayStatus] || '未知状态';
@@ -3238,6 +4342,67 @@ export default {
         this.faultSignalLoading = false;
       }, 2000);
     },
+    // 模拟机器人位置缺货信号
+    simulateRobotShortage(robotNum, position) {
+      const robotStatusKey = robotNum === 1 ? 'robotStatus' : 'robotStatus2';
+      const bitMap = {
+        a: 'bit0',
+        b: 'bit2',
+        d: 'bit6',
+        e: 'bit8'
+      };
+
+      const bitKey = bitMap[position];
+      if (!bitKey) {
+        this.$message.error('无效的位置参数');
+        return;
+      }
+
+      // 模拟触发缺货信号
+      this[robotStatusKey][bitKey] = '1';
+
+      // 2秒后自动恢复
+      setTimeout(() => {
+        this[robotStatusKey][bitKey] = '0';
+      }, 1000);
+    },
+    // 模拟机器人位置空托盘清理信号
+    simulateEmptyPalletClear(robotNum, position) {
+      const robotStatusKey = robotNum === 1 ? 'robotStatus' : 'robotStatus2';
+      const bitMap = {
+        a: 'bit1',
+        b: 'bit3',
+        d: 'bit7',
+        e: 'bit9'
+      };
+
+      const bitKey = bitMap[position];
+      if (!bitKey) {
+        this.$message.error('无效的位置参数');
+        return;
+      }
+
+      // 模拟触发空托盘清理信号
+      this[robotStatusKey][bitKey] = '1';
+
+      // 2秒后自动恢复
+      setTimeout(() => {
+        this[robotStatusKey][bitKey] = '0';
+      }, 1000);
+    },
+    // 模拟机器人位置杂物清理信号
+    simulateDebrisClear(robotNum, position) {
+      const robotStatusKey = robotNum === 1 ? 'robotStatus' : 'robotStatus2';
+      const bitKey = 'bit5'; // C位置杂物清理信号
+
+      // 模拟触发杂物清理信号
+      this[robotStatusKey][bitKey] = '1';
+
+      // 2秒后自动恢复
+      setTimeout(() => {
+        this[robotStatusKey][bitKey] = '0';
+      }, 1000);
+    },
     // 切换到报警日志时清除未读状态
     switchToAlarmLog() {
       this.activeLogType = 'alarm';
@@ -3318,119 +4483,107 @@ export default {
       return moment(timeValue).format('YYYY-MM-DD HH:mm:ss');
     },
 
-    // 切换机器人指示灯状态（三种状态循环切换）
+    // 切换机器人指示灯状态（启动/暂停两种状态切换）
     toggleRobotIndicator(robotId) {
       if (robotId === 'robot1') {
-        // 当前状态：停止 -> 启动 -> 暂停 -> 停止
-        if (
-          this.conveyorStatus.bit14 === '0' &&
-          this.conveyorStatus.bit10 === '0'
-        ) {
-          // 停止状态 -> 启动中
-          this.conveyorStatus.bit14 = '1';
-          this.conveyorStatus.bit10 = '0';
-          this.addLog('1#机器人状态切换为：启动中');
-        } else if (this.conveyorStatus.bit14 === '1') {
+        // 启动/暂停两种状态切换
+        if (this.conveyorStatus.bit14 === '1') {
           // 启动中 -> 暂停中
           this.conveyorStatus.bit14 = '0';
-          this.conveyorStatus.bit10 = '1';
           this.addLog('1#机器人状态切换为：暂停中');
-        } else if (this.conveyorStatus.bit10 === '1') {
-          // 暂停中 -> 停止
-          this.conveyorStatus.bit14 = '0';
-          this.conveyorStatus.bit10 = '0';
-          this.addLog('1#机器人状态切换为：已停止');
+        } else {
+          // 暂停中 -> 启动中
+          this.conveyorStatus.bit14 = '1';
+          this.addLog('1#机器人状态切换为：启动中');
         }
       } else if (robotId === 'robot2') {
-        // 当前状态：停止 -> 启动 -> 暂停 -> 停止
-        if (
-          this.conveyorStatus.bit15 === '0' &&
-          this.conveyorStatus.bit11 === '0'
-        ) {
-          // 停止状态 -> 启动中
-          this.conveyorStatus.bit15 = '1';
-          this.conveyorStatus.bit11 = '0';
-          this.addLog('2#机器人状态切换为：启动中');
-        } else if (this.conveyorStatus.bit15 === '1') {
+        // 启动/暂停两种状态切换
+        if (this.conveyorStatus.bit15 === '1') {
           // 启动中 -> 暂停中
           this.conveyorStatus.bit15 = '0';
-          this.conveyorStatus.bit11 = '1';
           this.addLog('2#机器人状态切换为：暂停中');
-        } else if (this.conveyorStatus.bit11 === '1') {
-          // 暂停中 -> 停止
-          this.conveyorStatus.bit15 = '0';
-          this.conveyorStatus.bit11 = '0';
-          this.addLog('2#机器人状态切换为：已停止');
+        } else {
+          // 暂停中 -> 启动中
+          this.conveyorStatus.bit15 = '1';
+          this.addLog('2#机器人状态切换为：启动中');
         }
       }
     },
-    // 获取位位置和动作名称
-    getBitPositionAndActionName(line, action) {
-      const lineName = `${line}#拆垛线`;
-      let bitPosition = 0;
+    // 获取PLC变量名和动作名称（单点写入）
+    getButtonPlcVarAndActionName(line, action) {
+      const lineName = `${line}#机械手`;
+      let plcVar = '';
       let actionName = '';
 
-      // 根据line和action确定要设置的位
       if (line === 1) {
         switch (action) {
           case 'start':
-            bitPosition = 12; // bit12：1#拆垛线启动按钮
+            plcVar = 'DBW102_BIT12'; // 1#机械手启动按钮
             actionName = `${lineName}启动`;
             break;
           case 'stop':
-            bitPosition = 13; // bit13：1#拆垛线停止按钮
+            plcVar = 'DBW102_BIT13'; // 1#机械手停止按钮
             actionName = `${lineName}停止`;
             break;
           case 'reset':
-            bitPosition = 10; // bit10：1#机器人复位按钮
+            plcVar = 'DBW102_BIT10'; // 1#机器人复位按钮
             actionName = `1#机器人复位`;
             break;
         }
       } else if (line === 2) {
         switch (action) {
           case 'start':
-            bitPosition = 14; // bit14：2#拆垛线启动按钮
+            plcVar = 'DBW102_BIT14'; // 2#机械手启动按钮
             actionName = `${lineName}启动`;
             break;
           case 'stop':
-            bitPosition = 15; // bit15：2#拆垛线停止按钮
+            plcVar = 'DBW102_BIT15'; // 2#机械手停止按钮
             actionName = `${lineName}停止`;
             break;
           case 'reset':
-            bitPosition = 11; // bit11：2#机器人复位按钮
+            plcVar = 'DBW102_BIT11'; // 2#机器人复位按钮
             actionName = `2#机器人复位`;
             break;
         }
       }
 
-      return { bitPosition, actionName };
+      return { plcVar, actionName };
     },
 
-    // 按钮按下时调用
+    // 按钮按下时调用（单次发送：置1）
     controlLinePress(line, action) {
-      const { bitPosition, actionName } = this.getBitPositionAndActionName(
+      const { plcVar, actionName } = this.getButtonPlcVarAndActionName(
         line,
         action
       );
+      if (!plcVar) return;
 
-      // 设置对应位为1（按下按钮）
-      this.currentDBW102Value |= 1 << bitPosition;
-      this.addLog(`发送PLC命令：${actionName}按钮按下`);
-      ipcRenderer.send('writeValuesToPLC', 'DBW102', this.currentDBW102Value);
+      // 设置按钮按下状态
+      const buttonKey = `${line}-${action}`;
+      this.buttonStates[buttonKey] = true;
+
+      this.addLog(`${actionName}按钮被按下，发送PLC值：${plcVar}=1`);
+      ipcRenderer.send('writeSingleValueToPLC', plcVar, true);
     },
 
-    // 按钮松开时调用
+    // 按钮松开时调用（单次发送：置0）
     controlLineRelease(line, action) {
-      const { bitPosition, actionName } = this.getBitPositionAndActionName(
+      const { plcVar, actionName } = this.getButtonPlcVarAndActionName(
         line,
         action
       );
+      if (!plcVar) return;
 
-      // 设置对应位为0（松开按钮）
-      this.currentDBW102Value &= ~(1 << bitPosition);
-      ipcRenderer.send('writeValuesToPLC', 'DBW102', this.currentDBW102Value);
+      // 设置按钮松开状态
+      const buttonKey = `${line}-${action}`;
 
-      this.addLog(`发送PLC命令：${actionName}按钮松开`);
+      // 如果按钮已经是松开状态，则不重复执行
+      if (!this.buttonStates[buttonKey]) return;
+
+      this.buttonStates[buttonKey] = false;
+
+      this.addLog(`${actionName}按钮松开，发送PLC值：${plcVar}=0`);
+      ipcRenderer.send('writeSingleValueToPLC', plcVar, false);
     }
   }
 };
@@ -3861,6 +5014,9 @@ export default {
                 padding: 2px 4px;
                 border-radius: 3px;
                 cursor: pointer;
+              }
+              .arm-label.has-pallet {
+                color: #3a940d; /* 绿色：有货 */
               }
               .marker-line {
                 position: absolute;
@@ -4461,6 +5617,29 @@ export default {
   margin-bottom: 0;
 }
 
+/* 测试面板按钮组样式 */
+:deep(.test-panel-dialog .el-button-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+:deep(.test-panel-dialog .el-button-group .el-button) {
+  margin: 0;
+  flex: 1;
+  min-width: 60px;
+  max-width: 80px;
+  padding: 4px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:deep(.test-panel-dialog .el-button-group .el-button + .el-button) {
+  margin-left: 0;
+}
+
 /* 托盘移动对话框样式 */
 .move-pallet-dialog {
   .target-pallet-list {
@@ -4657,7 +5836,7 @@ export default {
 /* 黄灯闪烁 - 暂停中 */
 .status-light.light-yellow-flash {
   background: radial-gradient(circle at 30% 30%, #fbbf24, #f59e0b);
-  animation: yellowFlash 1.5s infinite;
+  animation: yellowFlash 3s infinite;
 }
 
 .status-light.light-yellow-flash::before {
@@ -4899,9 +6078,12 @@ export default {
     font-size: 13px;
     transition: all 0.3s ease;
     border-radius: 6px;
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    transform: translateY(0);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+    &:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+      filter: brightness(0.95);
     }
   }
 
@@ -4916,6 +6098,29 @@ export default {
   .el-button--warning {
     background: linear-gradient(145deg, #e38c15, #b86f0d);
     border-color: #d18111;
+  }
+
+  // 机械手控制按钮按下特效
+  .button-pressed {
+    transform: translateY(2px) scale(0.98);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0.8;
+    transition: all 0.1s ease;
+  }
+
+  .button-pressed.el-button--success {
+    background-color: #52c41a;
+    border-color: #52c41a;
+  }
+
+  .button-pressed.el-button--danger {
+    background-color: #ff4d4f;
+    border-color: #ff4d4f;
+  }
+
+  .button-pressed.el-button--warning {
+    background-color: #faad14;
+    border-color: #faad14;
   }
 }
 </style>
