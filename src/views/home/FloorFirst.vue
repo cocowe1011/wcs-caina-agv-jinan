@@ -1128,6 +1128,44 @@
             </el-form>
           </div>
         </div>
+
+        <!-- AGV点位绑定/解绑测试 -->
+        <div class="test-section">
+          <h3>AGV点位绑定/解绑</h3>
+          <div class="test-form">
+            <el-form label-width="70px" size="small">
+              <el-form-item label="站点代码">
+                <el-input
+                  v-model="agvBindStationId"
+                  placeholder="输入站点代码"
+                  clearable
+                ></el-input>
+              </el-form-item>
+              <el-form-item>
+                <div style="display: flex; gap: 8px">
+                  <el-button
+                    type="success"
+                    size="small"
+                    @click="bindAgvStation"
+                    :loading="agvBindLoading"
+                    style="flex: 1"
+                  >
+                    绑定
+                  </el-button>
+                  <el-button
+                    type="warning"
+                    size="small"
+                    @click="unbindAgvStation"
+                    :loading="agvBindLoading"
+                    style="flex: 1"
+                  >
+                    解绑
+                  </el-button>
+                </div>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
       </div>
     </el-dialog>
     <!-- 托盘移动对话框 -->
@@ -1672,6 +1710,9 @@ export default {
       },
       twoEightHundredPalletTestCode: '',
       agvSignalLoading: false,
+      // AGV绑定解绑测试相关
+      agvBindStationId: '',
+      agvBindLoading: false,
       // 托盘移动功能所需数据
       movePalletDialogVisible: false,
       sourcePalletToMove: null,
@@ -2941,6 +2982,54 @@ export default {
             `${this.agvSchedule.startPosition}发送到${this.agvSchedule.endPosition}，没有这种任务类型，请检查！`
           );
         }
+      } else if (
+        this.agvSchedule.startPosition.startsWith('A') &&
+        ['a1', 'a2', 'b1', 'b2', 'd1', 'd2', 'e1'].includes(
+          this.agvSchedule.endPosition
+        )
+      ) {
+        // A区到机械臂（PF-FMR-COMMON-JH2）
+        taskType = 'PF-FMR-COMMON-JH2';
+        fromSiteCode = this.agvSchedule.startPosition;
+        toSiteCode = this.convertToStationId(this.agvSchedule.endPosition);
+        this.agvSchedule.status = 'singleRunning';
+        // 调用发送AGV指令方法
+        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+      } else if (
+        ['c1', 'c2'].includes(this.agvSchedule.startPosition) &&
+        this.agvSchedule.endPosition.startsWith('C')
+      ) {
+        // 机械臂到C区（PF-FMR-COMMON-JH2）- 杂物托盘清理，只有c1、c2
+        taskType = 'PF-FMR-COMMON-JH2';
+        fromSiteCode = this.convertToStationId(this.agvSchedule.startPosition);
+        toSiteCode = this.agvSchedule.endPosition;
+        this.agvSchedule.status = 'singleRunning';
+        // 调用发送AGV指令方法
+        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+      } else if (
+        ['a1', 'a2', 'b1', 'b2', 'd1', 'd2', 'e1'].includes(
+          this.agvSchedule.startPosition
+        ) &&
+        this.agvSchedule.endPosition.startsWith('z')
+      ) {
+        // 机械臂到空托盘区（PF-FMR-COMMON-JH5）- 空托盘清理，不包含c1、c2
+        taskType = 'PF-FMR-COMMON-JH5';
+        fromSiteCode = this.convertToStationId(this.agvSchedule.startPosition);
+        toSiteCode = this.agvSchedule.endPosition;
+        this.agvSchedule.status = 'singleRunning';
+        // 调用发送AGV指令方法
+        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+      } else if (
+        this.agvSchedule.startPosition.startsWith('z') &&
+        this.agvSchedule.endPosition.startsWith('C')
+      ) {
+        // 空托盘区到C区（PF-FMR-COMMON-JH6）
+        taskType = 'PF-FMR-COMMON-JH6';
+        fromSiteCode = this.agvSchedule.startPosition;
+        toSiteCode = this.agvSchedule.endPosition;
+        this.agvSchedule.status = 'singleRunning';
+        // 调用发送AGV指令方法
+        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
       } else {
         // 说明起点是缓存区
         fromSiteCode = this.agvSchedule.startPosition;
@@ -3922,6 +4011,123 @@ export default {
         this.agvSignalLoading = false;
         this.addLog('模拟三楼提升机出口有货信号已恢复');
       }, 1000);
+    },
+    // AGV站点绑定方法
+    async bindAgvStation() {
+      if (!this.agvBindStationId || this.agvBindStationId.trim() === '') {
+        this.$message.warning('请输入站点代码');
+        return;
+      }
+
+      // 转换站点ID（处理特殊站点）
+      const convertedStationId = this.convertStationIdForAgv(
+        this.agvBindStationId.trim()
+      );
+
+      this.agvBindLoading = true;
+      this.addLog(
+        `开始绑定AGV站点：${this.agvBindStationId} -> ${convertedStationId}`
+      );
+
+      try {
+        const bindSuccess = await this.sendAgvBindCommand(convertedStationId);
+
+        if (bindSuccess) {
+          this.$message.success(`站点 ${this.agvBindStationId} 绑定成功`);
+          this.addLog(
+            `站点 ${this.agvBindStationId} (${convertedStationId}) 绑定成功`
+          );
+          this.agvBindStationId = ''; // 清空输入框
+        } else {
+          this.$message.error(`站点 ${this.agvBindStationId} 绑定失败`);
+          this.addLog(
+            `站点 ${this.agvBindStationId} (${convertedStationId}) 绑定失败`
+          );
+        }
+      } catch (error) {
+        console.error('绑定AGV站点失败:', error);
+        this.$message.error(`绑定失败：${error.message || '请求异常'}`);
+        this.addLog(
+          `站点 ${this.agvBindStationId} (${convertedStationId}) 绑定失败：${error.message}`
+        );
+      } finally {
+        this.agvBindLoading = false;
+      }
+    },
+    // AGV站点解绑方法
+    async unbindAgvStation() {
+      if (!this.agvBindStationId || this.agvBindStationId.trim() === '') {
+        this.$message.warning('请输入站点代码');
+        return;
+      }
+
+      // 转换站点ID（处理特殊站点）
+      const convertedStationId = this.convertStationIdForAgv(
+        this.agvBindStationId.trim()
+      );
+
+      this.agvBindLoading = true;
+      this.addLog(
+        `开始解绑AGV站点：${this.agvBindStationId} -> ${convertedStationId}`
+      );
+
+      try {
+        const unbindSuccess = await this.sendAgvUnbindCommand(
+          convertedStationId
+        );
+
+        if (unbindSuccess) {
+          this.$message.success(`站点 ${this.agvBindStationId} 解绑成功`);
+          this.addLog(
+            `站点 ${this.agvBindStationId} (${convertedStationId}) 解绑成功`
+          );
+          this.agvBindStationId = ''; // 清空输入框
+        } else {
+          this.$message.error(`站点 ${this.agvBindStationId} 解绑失败`);
+          this.addLog(
+            `站点 ${this.agvBindStationId} (${convertedStationId}) 解绑失败`
+          );
+        }
+      } catch (error) {
+        console.error('解绑AGV站点失败:', error);
+        this.$message.error(`解绑失败：${error.message || '请求异常'}`);
+        this.addLog(
+          `站点 ${this.agvBindStationId} (${convertedStationId}) 解绑失败：${error.message}`
+        );
+      } finally {
+        this.agvBindLoading = false;
+      }
+    },
+    // 转换站点ID（处理特殊站点映射）
+    convertStationIdForAgv(inputStationId) {
+      // 特殊站点映射表：用户输入的站点名称 -> 站点ID
+      const specialStationMap = {
+        // 转盘/输送线位置（用户输入的位置名称 -> 呼叫站点ID）
+        'AGV2-1': '102',
+        'AGV2-2': '201',
+        'AGV2-3': '301',
+        'AGV5-1': '101',
+        'AGV1-1': '202',
+        'AGV3-1': '302',
+        // 机械臂位置（只支持小写字母，用户输入 -> 站点ID）
+        a1: '11',
+        b1: '12',
+        c1: '13',
+        d1: '14',
+        e1: '15',
+        a2: '21',
+        b2: '22',
+        c2: '23',
+        d2: '24'
+      };
+
+      // 直接匹配映射表（机械臂位置只接受小写）
+      if (specialStationMap[inputStationId]) {
+        return specialStationMap[inputStationId];
+      }
+
+      // 如果不在映射表中，直接返回原值（用户已经输入的是站点ID）
+      return inputStationId;
     },
     // --- 托盘移动功能方法 START ---
     handleOpenMovePalletDialog(item) {
