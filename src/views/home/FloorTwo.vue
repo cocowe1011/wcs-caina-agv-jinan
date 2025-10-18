@@ -2309,7 +2309,7 @@ export default {
       this.addLog(`发送AGV绑定指令: 位置=${slotCode}`);
       try {
         const res = await HttpUtilAGV.post(
-          '/rcs/rtas/api/robot/controller/matlabel/bind',
+          '/rcs/rtas/api/robot/controller/site/bind',
           params
         );
         if (res.code === 'SUCCESS') {
@@ -2343,7 +2343,7 @@ export default {
       this.addLog(`发送AGV解绑指令: 位置=${slotCode}`);
       try {
         const res = await HttpUtilAGV.post(
-          '/rcs/rtas/api/robot/controller/matlabel/unbind',
+          '/rcs/rtas/api/robot/controller/site/bind',
           params
         );
         if (res.code === 'SUCCESS') {
