@@ -3212,9 +3212,8 @@ export default {
       // );
       // return Date.now().toString();
       // 组装入参;
+      // 特殊处理PF - FMR - COMMON - JH6任务类型;
       let params;
-
-      // 特殊处理PF-FMR-COMMON-JH6任务类型
       if (taskType === 'PF-FMR-COMMON-JH6') {
         params = {
           taskType: taskType,
@@ -3479,16 +3478,8 @@ export default {
     handleStatus18EmptyDebrisPallets(allData) {
       // 定义机械臂队列与PLC清理完成命令的映射关系
       const clearCompleteMapping = {
-        a1: { robot: 1, clearCmd: 'DBW102_BIT1', type: '空托盘' }, // A空托盘清理完成
-        b1: { robot: 1, clearCmd: 'DBW102_BIT3', type: '空托盘' }, // B空托盘清理完成
-        c1: { robot: 1, clearCmd: 'DBW102_BIT5', type: '杂物托盘' }, // C杂物托盘清理完成
-        d1: { robot: 1, clearCmd: 'DBW102_BIT7', type: '空托盘' }, // D空托盘清理完成
-        e1: { robot: 1, clearCmd: 'DBW102_BIT9', type: '空托盘' }, // E空托盘清理完成
-        a2: { robot: 2, clearCmd: 'DBW104_BIT1', type: '空托盘' }, // A空托盘清理完成
-        b2: { robot: 2, clearCmd: 'DBW104_BIT3', type: '空托盘' }, // B空托盘清理完成
-        c2: { robot: 2, clearCmd: 'DBW104_BIT5', type: '杂物托盘' }, // C杂物托盘清理完成
-        d2: { robot: 2, clearCmd: 'DBW104_BIT7', type: '空托盘' }, // D空托盘清理完成
-        e2: { robot: 2, clearCmd: 'DBW104_BIT9', type: '空托盘' } // E空托盘清理完成
+        604: { robot: 1, clearCmd: 'DBW102_BIT5', type: '杂物托盘' }, // C杂物托盘清理完成
+        609: { robot: 2, clearCmd: 'DBW104_BIT5', type: '杂物托盘' } // C杂物托盘清理完成
       };
 
       // 过滤出C队列状态为18的托盘
@@ -3498,11 +3489,11 @@ export default {
 
       status18Pallets.forEach((pallet) => {
         // 根据targetPosition确定来源位置，发送清理完成信号
-        const targetPosition = pallet.targetPosition;
+        const targetId = pallet.targetId;
 
-        if (targetPosition) {
-          // 从targetPosition解析出机械手位置（例如：C1 -> c1, z1的targetPosition会保存原始a1/b1等）
-          const mapping = clearCompleteMapping[targetPosition.toLowerCase()];
+        if (targetId) {
+          // 从targetId解析出机械手位置（例如：C1 -> c1, z1的targetPosition会保存原始a1/b1等）
+          const mapping = clearCompleteMapping[targetId];
 
           if (mapping) {
             // 发送清理完成信号，持续2秒
@@ -3516,26 +3507,36 @@ export default {
             }, 2000);
 
             this.addLog(
-              `检测到托盘${pallet.trayInfo}在C${pallet.queueNum}位置已送达（状态18），来源${targetPosition}，已发送机器人${mapping.robot}${mapping.type}清理完成信号。`
+              `检测到托盘${pallet.trayInfo}在C${pallet.queueNum}位置已送达（状态18），来源${targetId}，已发送${mapping.clearCmd}清理完成信号。`
             );
-
-            // 更新托盘状态为14（已发送清理完成指令）
-            const param = {
-              id: pallet.id,
-              trayStatus: '14'
-            };
-            HttpUtil.post('/queue_info/update', param)
-              .then((res) => {
-                if (res.data == 1) {
-                  this.addLog(
-                    `托盘${pallet.trayInfo}状态已更新为14（已发送${mapping.type}清理完成指令）。`
-                  );
-                }
-              })
-              .catch((err) => {
-                this.addLog(`托盘${pallet.trayInfo}状态更新失败：${err}`);
-              });
           }
+
+          // 同时更新C队列托盘状态和解除C队列及源机械手位置的锁定
+          const params = [
+            {
+              id: pallet.id,
+              trayStatus: '14', // 已发送清理完成指令
+              isLock: '' // 解除C队列的锁定
+            }
+          ];
+
+          // 如果找到了源机械手位置的ID，也解除其锁定
+          params.push({
+            id: targetId,
+            isLock: '' // 解除源机械手位置的锁定
+          });
+
+          HttpUtil.post('/queue_info/updateByList', params)
+            .then((res) => {
+              if (res.data == 1) {
+                this.addLog(
+                  `托盘${pallet.trayInfo}状态已更新为14,C队列和机械手队列${targetId}锁定状态已解除。`
+                );
+              }
+            })
+            .catch((err) => {
+              this.addLog(`托盘${pallet.trayInfo}状态更新失败：${err}`);
+            });
         }
       });
     },
@@ -3549,22 +3550,21 @@ export default {
 
       status13Pallets.forEach((pallet) => {
         // 根据targetPosition确定来源位置，发送清理完成信号
-        const targetPosition = pallet.targetPosition; // 例如：A1, B1, D1, E1, A2, B2, D2, E2
+        const targetId = pallet.targetId; // 例如：602, 603, 605, 606, 607, 608, 610
 
-        if (targetPosition) {
+        if (targetId) {
           // 定义清理完成信号映射
           const clearCompleteMapping = {
-            A1: 'DBW102_BIT1',
-            B1: 'DBW102_BIT3',
-            D1: 'DBW102_BIT7',
-            E1: 'DBW102_BIT9',
-            A2: 'DBW104_BIT1',
-            B2: 'DBW104_BIT3',
-            D2: 'DBW104_BIT7',
-            E2: 'DBW104_BIT9'
+            602: 'DBW102_BIT1',
+            603: 'DBW102_BIT3',
+            605: 'DBW102_BIT7',
+            606: 'DBW102_BIT9',
+            607: 'DBW104_BIT1',
+            608: 'DBW104_BIT3',
+            610: 'DBW104_BIT7'
           };
 
-          const clearCmd = clearCompleteMapping[targetPosition];
+          const clearCmd = clearCompleteMapping[targetId];
 
           if (clearCmd) {
             // 发送清理完成信号，持续2秒
@@ -3574,19 +3574,29 @@ export default {
             }, 2000);
 
             this.addLog(
-              `检测到z${pallet.queueNum}位置空托盘已送达（状态13），来源${targetPosition}，已发送清理完成信号。`
+              `检测到z${pallet.queueNum}位置空托盘已送达（状态13），来源${targetId}，已发送清理完成信号${clearCmd}。`
             );
 
-            // 更新托盘状态为14（已经给PLC发送过清理托盘完成命令）
-            const param = {
-              id: pallet.id,
-              trayStatus: '14'
-            };
-            HttpUtil.post('/queue_info/update', param)
+            // 同时更新z队列托盘状态和解除z队列及源机械手位置的锁定
+            const params = [
+              {
+                id: pallet.id,
+                trayStatus: '14', // 已经给PLC发送过清理托盘完成命令
+                isLock: '' // 解除z队列的锁定
+              }
+            ];
+
+            // 如果找到了源机械手位置的ID，也解除其锁定
+            params.push({
+              id: targetId,
+              isLock: '' // 解除源机械手位置的锁定
+            });
+
+            HttpUtil.post('/queue_info/updateByList', params)
               .then((res) => {
                 if (res.data == 1) {
                   this.addLog(
-                    `z${pallet.queueNum}状态已更新为14（已发送清理完成指令）。`
+                    `z${pallet.queueNum}状态已更新为14（已发送清理完成指令），z队列和机械手队列${targetId}锁定状态已解除。`
                   );
                 }
               })
@@ -3676,6 +3686,24 @@ export default {
         // 获取源位置（机械臂位置）的固定ID
         const sourceId = this.robotAreaIdMap[position.toLowerCase()];
 
+        // 检查机械手队列是否已锁定
+        const robotQueueRes = await HttpUtil.post(
+          '/queue_info/queryQueueList',
+          {
+            id: sourceId
+          }
+        );
+
+        if (robotQueueRes.data && robotQueueRes.data.length > 0) {
+          const robotQueue = robotQueueRes.data[0];
+          if (robotQueue.isLock === '1') {
+            this.addLog(
+              `${robotNum}#机器人${position.toUpperCase()}位置队列已锁定，跳过空托盘清理处理`
+            );
+            return;
+          }
+        }
+
         // 查询z队列，找到第一个不是状态15（集满）的位置
         const res = await HttpUtil.post('/queue_info/queryQueueList', {
           queueName: 'z'
@@ -3699,21 +3727,28 @@ export default {
             );
 
             if (robotTaskCode) {
-              // 更新源机械手位置记录，状态为11（等待AGV取货）
-              const param = {
-                id: sourceId, // 源机械手位置的id
-                trayStatus: '11',
-                robotTaskCode: robotTaskCode,
-                targetPosition: toSiteCode, // 目的地队列名
-                targetId: availablePosition.id, // 目的地的id
-                trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置空托盘`
-              };
+              // 同时更新源机械手位置和z队列目标位置，并锁定两个位置
+              const params = [
+                {
+                  id: sourceId, // 源机械手位置的id
+                  trayStatus: '11',
+                  robotTaskCode: robotTaskCode,
+                  targetPosition: toSiteCode, // 目的地队列名
+                  targetId: availablePosition.id, // 目的地的id
+                  trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置空托盘`,
+                  isLock: '1' // 锁定源机械手位置
+                },
+                {
+                  id: availablePosition.id, // 目标z队列位置的id
+                  isLock: '1' // 锁定目标z队列位置
+                }
+              ];
 
-              HttpUtil.post('/queue_info/update', param)
+              HttpUtil.post('/queue_info/updateByList', params)
                 .then((updateRes) => {
                   if (updateRes.data == 1) {
                     this.addLog(
-                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理空托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11。`
+                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理空托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11，机械手队列和z队列已锁定。`
                     );
                   }
                 })
@@ -3736,6 +3771,24 @@ export default {
       try {
         // 获取源位置（机械臂C位置）的固定ID
         const sourceId = this.robotAreaIdMap[position.toLowerCase()];
+
+        // 检查机械手队列是否已锁定
+        const robotQueueRes = await HttpUtil.post(
+          '/queue_info/queryQueueList',
+          {
+            id: sourceId
+          }
+        );
+
+        if (robotQueueRes.data && robotQueueRes.data.length > 0) {
+          const robotQueue = robotQueueRes.data[0];
+          if (robotQueue.isLock === '1') {
+            this.addLog(
+              `${robotNum}#机器人${position.toUpperCase()}位置队列已锁定，跳过杂物托盘清理处理`
+            );
+            return;
+          }
+        }
 
         // 查询C队列，找到第一个空闲位置
         const res = await HttpUtil.post('/queue_info/queryQueueList', {
@@ -3760,7 +3813,7 @@ export default {
             );
 
             if (robotTaskCode) {
-              // 同时更新源机械手C位置记录和锁定C区目标位置
+              // 同时更新源机械手C位置记录和锁定机械手队列及C区目标位置
               const params = [
                 {
                   id: sourceId, // 源机械手C位置的id
@@ -3769,7 +3822,8 @@ export default {
                   robotTaskCode: robotTaskCode,
                   targetPosition: toSiteCode, // 目的地队列名
                   targetId: availablePosition.id, // 目的地的id
-                  trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置杂物托盘`
+                  trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置杂物托盘`,
+                  isLock: '1' // 锁定源机械手C位置
                 },
                 {
                   id: availablePosition.id, // 给目标C区位置上锁
@@ -3781,7 +3835,7 @@ export default {
                 .then((updateRes) => {
                   if (updateRes.data == 1) {
                     this.addLog(
-                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理杂物托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11，并锁定目标位置。`
+                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理杂物托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11，机械手队列和C队列已锁定。`
                     );
                   }
                 })
