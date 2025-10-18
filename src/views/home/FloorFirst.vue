@@ -224,7 +224,7 @@
                   </div>
                 </div>
               </div>
-              <!-- 三楼灌装线A -->
+              <!-- 三楼灌装线2803 -->
               <div class="marker-with-panel" data-x="520" data-y="840">
                 <div class="pulse"></div>
                 <div
@@ -232,7 +232,7 @@
                   :class="['position-left', { 'always-show': true }]"
                 >
                   <div class="data-panel-header">
-                    <span>三楼灌装线A</span>
+                    <span>三楼灌装线2803</span>
                   </div>
                   <div class="data-panel-content">
                     <div class="data-panel-row">
@@ -242,7 +242,7 @@
                   </div>
                 </div>
               </div>
-              <!-- 三楼灌装线B -->
+              <!-- 三楼灌装线2804 -->
               <div class="marker-with-panel" data-x="2980" data-y="850">
                 <div class="pulse"></div>
                 <div
@@ -250,7 +250,7 @@
                   :class="['position-right', { 'always-show': true }]"
                 >
                   <div class="data-panel-header">
-                    <span>三楼灌装线B</span>
+                    <span>三楼灌装线2804</span>
                   </div>
                   <div class="data-panel-content">
                     <div class="data-panel-row">
@@ -260,7 +260,7 @@
                   </div>
                 </div>
               </div>
-              <!-- 一楼灌装线A -->
+              <!-- 一楼灌装线2802 -->
               <div class="marker-with-panel" data-x="600" data-y="1020">
                 <div class="pulse"></div>
                 <div
@@ -268,7 +268,7 @@
                   :class="['position-bottom', { 'always-show': true }]"
                 >
                   <div class="data-panel-header">
-                    <span>一楼灌装线A</span>
+                    <span>一楼灌装线2802</span>
                   </div>
                   <div class="data-panel-content">
                     <div class="data-panel-row">
@@ -278,7 +278,7 @@
                   </div>
                 </div>
               </div>
-              <!-- 一楼灌装线B -->
+              <!-- 一楼灌装线2801 -->
               <div class="marker-with-panel" data-x="2980" data-y="1030">
                 <div class="pulse"></div>
                 <div
@@ -286,7 +286,7 @@
                   :class="['position-bottom', { 'always-show': true }]"
                 >
                   <div class="data-panel-header">
-                    <span>一楼灌装线B</span>
+                    <span>一楼灌装线2801</span>
                   </div>
                   <div class="data-panel-content">
                     <div class="data-panel-row">
@@ -1620,10 +1620,10 @@ export default {
       runningLogs: [], // 修改为空数组
       alarmLogs: [], // 修改为空数组
       scheduleData: [
-        { name: '三楼灌装线A', plan: 0, completed: 0 },
-        { name: '三楼灌装线B', plan: 0, completed: 0 },
-        { name: '一楼灌装线A', plan: 0, completed: 0 },
-        { name: '一楼灌装线B', plan: 0, completed: 0 }
+        { name: '三楼灌装线2803', plan: 0, completed: 0 },
+        { name: '三楼灌装线2804', plan: 0, completed: 0 },
+        { name: '一楼灌装线2802', plan: 0, completed: 0 },
+        { name: '一楼灌装线2801', plan: 0, completed: 0 }
       ],
       logId: 0, // 添加日志ID计数器
       // 输送线当前运行状态
