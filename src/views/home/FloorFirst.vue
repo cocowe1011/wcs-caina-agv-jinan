@@ -1532,8 +1532,9 @@ export default {
       mechanicalArms: [
         {
           name: 'a1',
-          x: 1300,
-          y: 415,
+          x: 1285,
+          y: 625,
+
           status: 0,
           currentPallet: null,
           currentDesc: null,
@@ -1541,8 +1542,8 @@ export default {
         },
         {
           name: 'b1',
-          x: 1380,
-          y: 415,
+          x: 1220,
+          y: 558,
           status: 0,
           currentPallet: null,
           currentDesc: null,
@@ -1550,8 +1551,8 @@ export default {
         },
         {
           name: 'c1',
-          x: 1220,
-          y: 558,
+          x: 1363,
+          y: 635,
           status: 0,
           currentPallet: null,
           currentDesc: null,
@@ -1559,8 +1560,8 @@ export default {
         },
         {
           name: 'd1',
-          x: 1285,
-          y: 625,
+          x: 1300,
+          y: 415,
           status: 0,
           currentPallet: null,
           currentDesc: null,
@@ -1568,8 +1569,8 @@ export default {
         },
         {
           name: 'e1',
-          x: 1363,
-          y: 635,
+          x: 1450,
+          y: 500,
           status: 0,
           currentPallet: null,
           currentDesc: null,
@@ -2192,7 +2193,12 @@ export default {
         }
         const res = await HttpUtil.post('/queue_info/queryQueueList', params);
         // 把trayStatus 为5的托盘保留下来
-        const trayList = res.data.filter((item) => item.trayStatus === '5');
+        const trayList = res.data.filter(
+          (item) =>
+            item.trayStatus === '5' ||
+            item.trayStatus === '18' ||
+            item.trayStatus === '19'
+        );
         if (trayList && trayList.length > 0) {
           // 输出日志
           this.addLog(`${queueName}托盘出库信息：${JSON.stringify(trayList)}`);
@@ -2984,7 +2990,7 @@ export default {
         }
       } else if (
         this.agvSchedule.startPosition.startsWith('A') &&
-        ['a1', 'a2', 'b1', 'b2', 'd1', 'd2', 'e1'].includes(
+        ['a1', 'a2', 'b1', 'b2', 'd1', 'd2', 'e1', 'c1', 'c2'].includes(
           this.agvSchedule.endPosition
         )
       ) {
@@ -2993,43 +2999,14 @@ export default {
         fromSiteCode = this.agvSchedule.startPosition;
         toSiteCode = this.convertToStationId(this.agvSchedule.endPosition);
         this.agvSchedule.status = 'singleRunning';
-        // 调用发送AGV指令方法
-        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
-      } else if (
-        ['c1', 'c2'].includes(this.agvSchedule.startPosition) &&
-        this.agvSchedule.endPosition.startsWith('C')
-      ) {
-        // 机械臂到C区（PF-FMR-COMMON-JH2）- 杂物托盘清理，只有c1、c2
-        taskType = 'PF-FMR-COMMON-JH2';
-        fromSiteCode = this.convertToStationId(this.agvSchedule.startPosition);
-        toSiteCode = this.agvSchedule.endPosition;
-        this.agvSchedule.status = 'singleRunning';
-        // 调用发送AGV指令方法
-        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
-      } else if (
-        ['a1', 'a2', 'b1', 'b2', 'd1', 'd2', 'e1'].includes(
-          this.agvSchedule.startPosition
-        ) &&
-        this.agvSchedule.endPosition.startsWith('z')
-      ) {
-        // 机械臂到空托盘区（PF-FMR-COMMON-JH5）- 空托盘清理，不包含c1、c2
-        taskType = 'PF-FMR-COMMON-JH5';
-        fromSiteCode = this.convertToStationId(this.agvSchedule.startPosition);
-        toSiteCode = this.agvSchedule.endPosition;
-        this.agvSchedule.status = 'singleRunning';
-        // 调用发送AGV指令方法
-        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
-      } else if (
-        this.agvSchedule.startPosition.startsWith('z') &&
-        this.agvSchedule.endPosition.startsWith('C')
-      ) {
-        // 空托盘区到C区（PF-FMR-COMMON-JH6）
-        taskType = 'PF-FMR-COMMON-JH6';
-        fromSiteCode = this.agvSchedule.startPosition;
-        toSiteCode = this.agvSchedule.endPosition;
-        this.agvSchedule.status = 'singleRunning';
-        // 调用发送AGV指令方法
-        this.sendAgvCommand(taskType, fromSiteCode, toSiteCode);
+
+        // 发送时判断队列数据，如果有队列数据则一起处理
+        await this.handleAgvSendWithQueueCheck(
+          taskType,
+          fromSiteCode,
+          toSiteCode,
+          this.agvSchedule.endPosition
+        );
       } else {
         // 说明起点是缓存区
         fromSiteCode = this.agvSchedule.startPosition;
@@ -3368,11 +3345,19 @@ export default {
           // 处理z队列状态为13的托盘（已送至空托盘区域，需发送清理完成信号）
           this.handleStatus13EmptyPallets(res.data);
 
-          // 处理C队列状态为18的托盘（空托盘/杂物已送至C区，需发送送货完成信号）
-          this.handleStatus18EmptyDebrisPallets(res.data);
-
-          // 处理z队列状态为15的托盘（空托盘区域集满，需发送到C区）
+          // 处理z队列状态为15的托盘（空托盘区域集满，需发送到AGV2-2输送线）
           this.handleFullEmptyPalletArea(res.data);
+
+          // 处理z队列状态为18的托盘（空托盘已送至输送线，插入AGV2-2队列）
+          const status18PalletsZ = res.data.filter(
+            (item) => item.trayStatus === '18' && item.queueName === 'z'
+          );
+          if (status18PalletsZ.length > 0) {
+            this.insertPalletToAGV(status18PalletsZ, 'AGV2-2');
+          }
+
+          // 处理机械臂c1/c2队列状态为19的托盘（杂物托盘已送至输送线，插入AGV2-2队列并发送清理完成信号）
+          this.handleStatus19DebrisPallets(res.data);
         }
       });
     },
@@ -3474,73 +3459,6 @@ export default {
       });
     },
 
-    // 处理C队列状态为18的托盘（空托盘/杂物已送至C区，发送清理完成信号）
-    handleStatus18EmptyDebrisPallets(allData) {
-      // 定义机械臂队列与PLC清理完成命令的映射关系
-      const clearCompleteMapping = {
-        604: { robot: 1, clearCmd: 'DBW102_BIT5', type: '杂物托盘' }, // C杂物托盘清理完成
-        609: { robot: 2, clearCmd: 'DBW104_BIT5', type: '杂物托盘' } // C杂物托盘清理完成
-      };
-
-      // 过滤出C队列状态为18的托盘
-      const status18Pallets = allData.filter(
-        (item) => item.trayStatus === '18' && item.queueName === 'C'
-      );
-
-      status18Pallets.forEach((pallet) => {
-        // 根据targetPosition确定来源位置，发送清理完成信号
-        const targetId = pallet.targetId;
-
-        if (targetId) {
-          // 从targetId解析出机械手位置（例如：C1 -> c1, z1的targetPosition会保存原始a1/b1等）
-          const mapping = clearCompleteMapping[targetId];
-
-          if (mapping) {
-            // 发送清理完成信号，持续2秒
-            ipcRenderer.send('writeSingleValueToPLC', mapping.clearCmd, true);
-            setTimeout(() => {
-              ipcRenderer.send(
-                'writeSingleValueToPLC',
-                mapping.clearCmd,
-                false
-              );
-            }, 2000);
-
-            this.addLog(
-              `检测到托盘${pallet.trayInfo}在C${pallet.queueNum}位置已送达（状态18），来源${targetId}，已发送${mapping.clearCmd}清理完成信号。`
-            );
-          }
-
-          // 同时更新C队列托盘状态和解除C队列及源机械手位置的锁定
-          const params = [
-            {
-              id: pallet.id,
-              trayStatus: '14', // 已发送清理完成指令
-              isLock: '' // 解除C队列的锁定
-            }
-          ];
-
-          // 如果找到了源机械手位置的ID，也解除其锁定
-          params.push({
-            id: targetId,
-            isLock: '' // 解除源机械手位置的锁定
-          });
-
-          HttpUtil.post('/queue_info/updateByList', params)
-            .then((res) => {
-              if (res.data == 1) {
-                this.addLog(
-                  `托盘${pallet.trayInfo}状态已更新为14,C队列和机械手队列${targetId}锁定状态已解除。`
-                );
-              }
-            })
-            .catch((err) => {
-              this.addLog(`托盘${pallet.trayInfo}状态更新失败：${err}`);
-            });
-        }
-      });
-    },
-
     // 处理z队列状态为13的托盘（已送至空托盘区域，发送清理完成信号）
     handleStatus13EmptyPallets(allData) {
       // 过滤出z队列状态为13的托盘
@@ -3608,7 +3526,67 @@ export default {
       });
     },
 
-    // 处理空托盘区域集满（状态15），发送到C区
+    // 处理机械臂c1/c2队列状态为19的托盘（杂物托盘已送至输送线，插入AGV2-2队列并发送清理完成信号）
+    handleStatus19DebrisPallets(allData) {
+      // 定义机械臂C位置与PLC清理完成命令的映射关系
+      const clearCompleteMapping = {
+        604: { robot: 1, clearCmd: 'DBW102_BIT5', type: '杂物托盘' }, // C1杂物托盘清理完成
+        609: { robot: 2, clearCmd: 'DBW104_BIT5', type: '杂物托盘' } // C2杂物托盘清理完成
+      };
+
+      console.log(allData);
+
+      // 过滤出机械臂c1/c2位置状态为19的托盘
+      const status19Pallets = allData.filter(
+        (item) =>
+          item.trayStatus === '19' && (item.id === '604' || item.id === '609') // c1和c2的固定ID
+      );
+      console.log(status19Pallets);
+
+      status19Pallets.forEach((pallet) => {
+        const mapping = clearCompleteMapping[pallet.id];
+
+        if (mapping) {
+          // 先插入AGV2-2队列
+          this.insertPalletToAGV([pallet], 'AGV2-2');
+
+          // 发送清理完成信号，持续2秒
+          ipcRenderer.send('writeSingleValueToPLC', mapping.clearCmd, true);
+          setTimeout(() => {
+            ipcRenderer.send('writeSingleValueToPLC', mapping.clearCmd, false);
+          }, 2000);
+
+          this.addLog(
+            `检测到托盘${pallet.trayInfo}在${pallet.queueName}${pallet.queueNum}位置已送达AGV2-2输送线（状态19），已插入AGV2-2队列并发送${mapping.clearCmd}杂物清理完成信号。`
+          );
+
+          // 更新托盘状态为14（已发送清理完成指令）并解除机械手队列锁定
+          const param = {
+            id: pallet.id,
+            trayStatus: '14', // 已发送清理完成指令
+            trayInfo: '', // 清空托盘信息
+            robotTaskCode: '',
+            targetPosition: '',
+            trayInfoAdd: '',
+            isLock: '' // 解除机械手C位置的锁定
+          };
+
+          HttpUtil.post('/queue_info/update', param)
+            .then((res) => {
+              if (res.data == 1) {
+                this.addLog(
+                  `托盘${pallet.trayInfo}状态已更新为14（已发送清理完成指令），机械手队列${pallet.queueName}${pallet.queueNum}锁定状态已解除。`
+                );
+              }
+            })
+            .catch((err) => {
+              this.addLog(`托盘${pallet.trayInfo}状态更新失败：${err}`);
+            });
+        }
+      });
+    },
+
+    // 处理空托盘区域集满（状态15），发送到AGV2-2输送线
     async handleFullEmptyPalletArea(allData) {
       // 过滤出z队列状态为15的托盘
       const status15Pallets = allData.filter(
@@ -3617,61 +3595,36 @@ export default {
 
       for (const pallet of status15Pallets) {
         try {
-          // 查询C队列，找到第一个空闲位置
-          const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            queueName: 'C'
-          });
+          // 直接发送到AGV2-2输送线
+          const fromSiteCode = 'z' + pallet.queueNum;
+          const toSiteCode = '201'; // AGV2-2输送线站点ID
 
-          if (res.code === '200' && res.data && res.data.length > 0) {
-            // 找到第一个空闲位置（trayStatus为空或""）
-            const availablePosition = res.data.find(
-              (item) => !item.trayStatus || item.trayStatus === ''
-            );
+          const robotTaskCode = await this.sendAgvCommand(
+            'PF-FMR-COMMON-JH6', // 空托盘区到输送线的任务类型
+            fromSiteCode,
+            toSiteCode
+          );
 
-            if (availablePosition) {
-              // 发送AGV指令：从z队列到C区
-              const fromSiteCode = 'z' + pallet.queueNum;
-              const toSiteCode = 'C' + availablePosition.queueNum;
+          if (robotTaskCode) {
+            // 更新z队列位置状态为16-空托盘处理命令已发送，正在等待AGV取货
+            const param = {
+              id: pallet.id,
+              trayStatus: '16', // 16-空托盘处理命令已发送，正在等待AGV取货
+              robotTaskCode: robotTaskCode,
+              targetPosition: 'AGV2-2' // 目的地为AGV2-2输送线
+            };
 
-              const robotTaskCode = await this.sendAgvCommand(
-                'PF-FMR-COMMON-JH6', // 空托盘区到C区的任务类型
-                fromSiteCode,
-                toSiteCode
-              );
-
-              if (robotTaskCode) {
-                // 同时更新z队列位置状态和锁定C区目标位置
-                const params = [
-                  {
-                    id: pallet.id,
-                    trayStatus: '16',
-                    robotTaskCode: robotTaskCode,
-                    targetPosition: toSiteCode, // 目的地
-                    targetId: availablePosition.id // 目的地的id
-                  },
-                  {
-                    id: availablePosition.id, // 给目标C区位置上锁
-                    isLock: '1'
-                  }
-                ];
-
-                HttpUtil.post('/queue_info/updateByList', params)
-                  .then((updateRes) => {
-                    if (updateRes.data == 1) {
-                      this.addLog(
-                        `检测到z${pallet.queueNum}位置空托盘区域集满（状态15），已发送AGV指令到C${availablePosition.queueNum}位置，状态更新为16，并锁定目标位置。`
-                      );
-                    }
-                  })
-                  .catch((err) => {
-                    this.addLog(`z队列状态更新失败：${err}`);
-                  });
-              }
-            } else {
-              this.addLog(
-                `C队列所有位置都已占用，无法处理z${pallet.queueNum}空托盘区域集满。`
-              );
-            }
+            HttpUtil.post('/queue_info/update', param)
+              .then((updateRes) => {
+                if (updateRes.data == 1) {
+                  this.addLog(
+                    `检测到z${pallet.queueNum}位置空托盘区域集满（状态15），已发送AGV指令到AGV2-2输送线，状态更新为16（空托盘处理命令已发送，正在等待AGV取货）。`
+                  );
+                }
+              })
+              .catch((err) => {
+                this.addLog(`z队列状态更新失败：${err}`);
+              });
           }
         } catch (err) {
           this.addLog(`处理z${pallet.queueNum}空托盘区域集满失败：${err}`);
@@ -3767,7 +3720,7 @@ export default {
 
     // 处理杂物托盘清理（C位置）
     async handleDebrisClear(position, robotNum) {
-      // 机械手C→C区：更新源机械手C位置记录
+      // 机械手C→AGV2-2输送线：更新源机械手C位置记录
       try {
         // 获取源位置（机械臂C位置）的固定ID
         const sourceId = this.robotAreaIdMap[position.toLowerCase()];
@@ -3790,65 +3743,42 @@ export default {
           }
         }
 
-        // 查询C队列，找到第一个空闲位置
-        const res = await HttpUtil.post('/queue_info/queryQueueList', {
-          queueName: 'C'
-        });
+        // 直接发送到AGV2-2输送线
+        const fromSiteCode = position.toUpperCase(); // 例如：C1, C2
+        const toSiteCode = '201'; // AGV2-2输送线站点ID
 
-        if (res.code === '200' && res.data && res.data.length > 0) {
-          // 找到第一个空闲位置（trayStatus为空或""）
-          const availablePosition = res.data.find(
-            (item) => !item.trayStatus || item.trayStatus === ''
-          );
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-COMMON-JH2', // 机械臂到输送线的任务类型
+          this.convertToStationId(fromSiteCode),
+          toSiteCode
+        );
 
-          if (availablePosition) {
-            // 发送AGV指令：从C位置到C区
-            const fromSiteCode = position.toUpperCase(); // 例如：C1, C2
-            const toSiteCode = 'C' + availablePosition.queueNum;
+        if (robotTaskCode) {
+          // 更新源机械手C位置记录，状态改为8-在c1 c2等待AGV取货
+          const param = {
+            id: sourceId, // 源机械手C位置的id
+            trayInfo: robotTaskCode, // 使用任务号作为托盘信息
+            trayStatus: '8', // 8-在c1 c2等待AGV取货
+            robotTaskCode: robotTaskCode,
+            targetPosition: 'AGV2-2', // 目的地为AGV2-2输送线
+            trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置杂物托盘`,
+            isLock: '1' // 锁定源机械手C位置
+          };
 
-            const robotTaskCode = await this.sendAgvCommand(
-              'PF-FMR-COMMON-JH2', // 机械臂到C区的任务类型
-              this.convertToStationId(fromSiteCode),
-              toSiteCode
-            );
-
-            if (robotTaskCode) {
-              // 同时更新源机械手C位置记录和锁定机械手队列及C区目标位置
-              const params = [
-                {
-                  id: sourceId, // 源机械手C位置的id
-                  trayInfo: robotTaskCode, // 使用任务号作为托盘信息
-                  trayStatus: '11',
-                  robotTaskCode: robotTaskCode,
-                  targetPosition: toSiteCode, // 目的地队列名
-                  targetId: availablePosition.id, // 目的地的id
-                  trayInfoAdd: `${robotNum}#机器人${position.toUpperCase()}位置杂物托盘`,
-                  isLock: '1' // 锁定源机械手C位置
-                },
-                {
-                  id: availablePosition.id, // 给目标C区位置上锁
-                  isLock: '1'
-                }
-              ];
-
-              HttpUtil.post('/queue_info/updateByList', params)
-                .then((updateRes) => {
-                  if (updateRes.data == 1) {
-                    this.addLog(
-                      `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理杂物托盘，已发送AGV指令到${toSiteCode}位置，源位置状态更新为11，机械手队列和C队列已锁定。`
-                    );
-                  }
-                })
-                .catch((err) => {
-                  this.addLog(`机械手位置状态更新失败：${err}`);
-                });
-            }
-          } else {
-            this.addLog(`C队列所有位置都已占用，无法清理杂物托盘。`);
-          }
+          HttpUtil.post('/queue_info/update', param)
+            .then((updateRes) => {
+              if (updateRes.data == 1) {
+                this.addLog(
+                  `检测到${robotNum}#机器人${position.toUpperCase()}位置需要清理杂物托盘，已发送AGV指令到AGV2-2输送线，源位置状态更新为8（在c1 c2等待AGV取货），机械手队列已锁定。`
+                );
+              }
+            })
+            .catch((err) => {
+              this.addLog(`机械手位置状态更新失败：${err}`);
+            });
         }
       } catch (err) {
-        this.addLog(`查询C队列失败：${err}`);
+        this.addLog(`杂物托盘清理失败：${err}`);
       }
     },
 
@@ -4040,6 +3970,118 @@ export default {
           this.$set(item, 'showSendPanel', true);
         });
     },
+
+    // 处理AGV发送时判断队列数据的方法
+    async handleAgvSendWithQueueCheck(
+      taskType,
+      fromSiteCode,
+      toSiteCode,
+      targetPosition
+    ) {
+      try {
+        // 1. 首先查询A区的队列数据
+        const aQueueRes = await HttpUtil.post('/queue_info/queryQueueList', {
+          queueName: 'A'
+        });
+
+        let queueDataToProcess = null;
+
+        if (aQueueRes.data && aQueueRes.data.length > 0) {
+          // 查找匹配的队列数据
+          const matchedQueueItem = aQueueRes.data.find(
+            (item) =>
+              item.queueName + item.queueNum === fromSiteCode &&
+              item.trayInfo &&
+              item.trayInfo !== '' &&
+              item.trayStatus === '2' // 已送至2楼缓存区的状态
+          );
+
+          if (matchedQueueItem) {
+            queueDataToProcess = matchedQueueItem;
+            this.addLog(
+              `找到队列数据：托盘${matchedQueueItem.trayInfo}，目的地${matchedQueueItem.mudidi}`
+            );
+          }
+        }
+
+        // 2. 发送AGV指令
+        const robotTaskCode = await this.sendAgvCommand(
+          taskType,
+          fromSiteCode,
+          toSiteCode
+        );
+
+        if (robotTaskCode && robotTaskCode !== '') {
+          // 3. 如果有队列数据，一起处理队列数据
+          if (queueDataToProcess) {
+            await this.updateQueueDataWithAgvTask(
+              queueDataToProcess,
+              robotTaskCode,
+              targetPosition
+            );
+          } else {
+            this.addLog(`AGV指令发送成功，任务码：${robotTaskCode}`);
+          }
+        } else {
+          this.addLog('AGV指令发送失败');
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (error) {
+        this.addLog(`处理AGV发送和队列数据时出错：${error.message}`);
+        this.$message.error(`处理AGV发送和队列数据时出错：${error.message}`);
+      }
+    },
+
+    // 更新队列数据与AGV任务关联
+    async updateQueueDataWithAgvTask(queueItem, robotTaskCode, targetPosition) {
+      try {
+        // 获取目标机械臂位置的固定ID
+        const targetId = this.robotAreaIdMap[targetPosition];
+
+        if (!targetId) {
+          this.addLog(`未找到目标位置${targetPosition}的ID映射`);
+          return;
+        }
+
+        // 更新队列数据状态
+        const updateParams = [
+          {
+            id: queueItem.id,
+            trayStatus: '23', // 送往机械臂目的地，正在等待AGV取货
+            robotTaskCode: robotTaskCode,
+            targetPosition: targetPosition,
+            targetId: targetId
+          },
+          {
+            id: targetId, // 给目标机械手位置上锁
+            isLock: '1'
+          }
+        ];
+
+        await HttpUtil.post('/queue_info/updateByList', updateParams)
+          .then((res) => {
+            if (res.data == 1) {
+              this.addLog(
+                `已为${targetPosition}位置发送AGV送货任务，托盘：${queueItem.trayInfo}，并锁定机械手队列`
+              );
+              this.$message.success(
+                `已为${targetPosition}位置自动调度托盘${queueItem.trayInfo}`
+              );
+            } else {
+              this.addLog(`队列数据更新失败`);
+              this.$message.error('队列数据更新失败');
+            }
+          })
+          .catch((err) => {
+            this.addLog(`队列数据更新失败：${err.message}`);
+            this.$message.error(`队列数据更新失败：${err.message}`);
+          });
+      } catch (error) {
+        this.addLog(`更新队列数据时出错：${error.message}`);
+        this.$message.error(`更新队列数据时出错：${error.message}`);
+      }
+    },
+
     simulateAGV1Signal() {
       this.agvSignalLoading = true;
       // 设置bit5为1，触发监听器
