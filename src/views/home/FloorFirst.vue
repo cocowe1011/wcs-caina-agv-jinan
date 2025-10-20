@@ -2203,10 +2203,17 @@ export default {
           // 输出日志
           this.addLog(`${queueName}托盘出库信息：${JSON.stringify(trayList)}`);
           // 调用AGV过来运货
+          // 如果targetPosition不是D*，则默认D1
+          const targetPosition =
+            trayList[0].targetPosition &&
+            trayList[0].targetPosition.startsWith('D')
+              ? trayList[0].targetPosition
+              : 'D1';
+
           const robotTaskCode = await this.sendAgvCommand(
             'PF-FMR-COMMON-JH4',
             fromCode,
-            trayList[0].targetPosition
+            targetPosition
           );
           if (robotTaskCode !== '') {
             // 更新托盘状态
@@ -2219,17 +2226,17 @@ export default {
               .then((resUpdate) => {
                 if (resUpdate.data == 1) {
                   this.addLog(
-                    `已给${queueName}目的地：${trayList[0].targetPosition}，发送AGV运输任务`
+                    `已给${queueName}目的地：${targetPosition}，发送AGV运输任务`
                   );
                 } else {
                   this.addLog(
-                    `给${queueName}目的地：${trayList[0].targetPosition}，发送AGV运输任务失败`
+                    `给${queueName}目的地：${targetPosition}，发送AGV运输任务失败`
                   );
                 }
               })
               .catch((err) => {
                 this.addLog(
-                  `给${queueName}目的地：${trayList[0].targetPosition}，发送AGV运输任务失败：${err.message}`
+                  `给${queueName}目的地：${targetPosition}，发送AGV运输任务失败：${err.message}`
                 );
               });
           }
@@ -3197,7 +3204,7 @@ export default {
           targetRoute: [
             {
               type: 'MIX_CONDITION',
-              code: `[{"type":"SITE","code":"${fromSiteCode}"},{"type":"PILE_COUNT","code":"8"}]`
+              code: `[{"type":"SITE","code":"${fromSiteCode}"},{"type":"PILE_COUNT","code":"4"}]`
             },
             {
               type: 'SITE',
@@ -3748,7 +3755,7 @@ export default {
         const toSiteCode = '201'; // AGV2-2输送线站点ID
 
         const robotTaskCode = await this.sendAgvCommand(
-          'PF-FMR-COMMON-JH2', // 机械臂到输送线的任务类型
+          'PF-FMR-COMMON-JH20', // 机械臂到输送线的任务类型
           this.convertToStationId(fromSiteCode),
           toSiteCode
         );
