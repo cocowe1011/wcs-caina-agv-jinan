@@ -3411,10 +3411,12 @@ export default {
       const robotMapping = {
         a1: { robot: 1, completeCmd: 'DBW102_BIT0' },
         b1: { robot: 1, completeCmd: 'DBW102_BIT2' },
+        c1: { robot: 1, completeCmd: 'DBW102_BIT4' },
         d1: { robot: 1, completeCmd: 'DBW102_BIT6' },
         e1: { robot: 1, completeCmd: 'DBW102_BIT8' },
         a2: { robot: 2, completeCmd: 'DBW104_BIT0' },
         b2: { robot: 2, completeCmd: 'DBW104_BIT2' },
+        c2: { robot: 2, completeCmd: 'DBW104_BIT4' },
         d2: { robot: 2, completeCmd: 'DBW104_BIT6' },
         e2: { robot: 2, completeCmd: 'DBW104_BIT8' }
       };
