@@ -188,10 +188,10 @@
                   class="marker-button"
                   @click="handlePalletStorageClick('H', '来料缓存区(H1-H20)')"
                 >
-                  来料缓存区(H1-H20)
+                  来料缓存区(H1-H8)
                 </button>
               </div>
-              <div class="marker-with-button" data-x="720" data-y="250">
+              <!-- <div class="marker-with-button" data-x="720" data-y="250">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -199,8 +199,8 @@
                 >
                   2500-1(H21-H49)
                 </button>
-              </div>
-              <div class="marker-with-button" data-x="980" data-y="880">
+              </div> -->
+              <!-- <div class="marker-with-button" data-x="980" data-y="880">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -208,8 +208,8 @@
                 >
                   2500-2(H50-H69)
                 </button>
-              </div>
-              <div class="marker-with-button" data-x="1800" data-y="980">
+              </div> -->
+              <!-- <div class="marker-with-button" data-x="1800" data-y="980">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -217,8 +217,8 @@
                 >
                   2500-3(H70-H99)
                 </button>
-              </div>
-              <div class="marker-with-button" data-x="2260" data-y="250">
+              </div> -->
+              <!-- <div class="marker-with-button" data-x="2260" data-y="250">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -226,8 +226,8 @@
                 >
                   2500-4(H150-H199)
                 </button>
-              </div>
-              <div class="marker-with-button" data-x="2820" data-y="880">
+              </div> -->
+              <!-- <div class="marker-with-button" data-x="2820" data-y="880">
                 <div class="pulse"></div>
                 <button
                   class="marker-button"
@@ -235,7 +235,7 @@
                 >
                   2500-5(H100-H119)
                 </button>
-              </div>
+              </div> -->
             </div>
           </div>
         </div>
@@ -790,9 +790,41 @@ export default {
         status: 'idle' // idle没任务 singleRunning单次任务执行中 cycleRunning多次任务执行中
       },
       // 新增起点点位列表
-      startAgvPositions: [{ value: 'AGV5-1' }],
+      startAgvPositions: [
+        { value: 'AGV5-1' },
+        { value: 'H1' },
+        { value: 'H2' },
+        { value: 'H3' },
+        { value: 'H4' },
+        { value: 'H5' },
+        { value: 'H6' },
+        { value: 'H7' },
+        { value: 'H8' }
+      ],
       // 新增终点点位列表
-      endAgvPositions: [],
+      endAgvPositions: [
+        { value: 'H1' },
+        { value: 'H2' },
+        { value: 'H3' },
+        { value: 'H4' },
+        { value: 'H5' },
+        { value: 'H6' },
+        { value: 'H7' },
+        { value: 'H8' },
+        { value: '25001' },
+        { value: '25002' },
+        { value: '25003' },
+        { value: '25004' },
+        { value: '25005' },
+        { value: '25006' },
+        { value: '25007' },
+        { value: '25008' },
+        { value: '25009' },
+        { value: '25010' },
+        { value: '25011' },
+        { value: '25012' },
+        { value: '25013' }
+      ],
       // 定义一个map，可以通过type获取到code
       agvCodeMap: {
         'AGV5-1': '101'
@@ -868,7 +900,6 @@ export default {
   mounted() {
     this.initializeMarkers();
     // 启动定时器
-    this.startAgvTimer();
     this.connectToWebSocketServer(); // 连接到WebSocket服务器
     ipcRenderer.on('receivedMsg', (event, values, values2) => {
       // 使用位运算优化赋值
@@ -988,7 +1019,6 @@ export default {
     },
     beforeDestroy() {
       // 清除定时器
-      this.stopAgvTimer();
       window.removeEventListener('resize', this.updateMarkerPositionsScoped);
     },
     handlePalletStorageClick(area, title) {
@@ -1189,13 +1219,13 @@ export default {
               (item) =>
                 (item.trayInfo === null || item.trayInfo === '') &&
                 parseInt(item.queueNum) >= 1 &&
-                parseInt(item.queueNum) <= 20
+                parseInt(item.queueNum) <= 8
             );
             if (emptyPosition) {
               // 说明有空缓存位置
               // 根据托盘信息给AGV小车发送指令
               const robotTaskCode = await this.sendAgvCommand(
-                'PF-FMR-COMMON-JH10',
+                'PF-FMR-COMMON-JH11',
                 '101',
                 emptyPosition.queueName + emptyPosition.queueNum
               );
@@ -1240,9 +1270,9 @@ export default {
                   });
               }
             } else {
-              this.$message.error('来料缓存区(H1-H20)没有空闲位置');
+              this.$message.error('来料缓存区(H1-H8)没有空闲位置');
               this.addLog(
-                `${trayCode} 托盘入库失败，来料缓存区(H1-H20)没有空闲位置`
+                `${trayCode} 托盘入库失败，来料缓存区(H1-H8)没有空闲位置`
               );
             }
           }
@@ -1335,158 +1365,105 @@ export default {
         this.$message.warning('当前正在循环执行，请先停止循环执行');
         return;
       }
-      // 判断起点类型
-      let taskType = '';
-      let fromSiteCode = '';
-      let toSiteCode = '';
 
-      if (this.agvSchedule.startPosition === 'AGV5-1') {
-        // 说明起点是转盘
-        fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
-        if (this.agvSchedule.endPosition.includes('H')) {
-          taskType = 'PF-FMR-COMMON-JH10';
-          toSiteCode = this.agvSchedule.endPosition;
-          // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
-          const res = await HttpUtil.post('/queue_info/queryQueueList', {
-            // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
-            queueName: toSiteCode.charAt(0),
-            queueNum: toSiteCode.substring(1)
-          });
-          if (res.data && res.data.length > 0) {
-            if (res.data[0].trayInfo === null || res.data[0].trayInfo === '') {
-              this.agvSchedule.status = 'singleRunning';
-              // 调用发送AGV指令方法
-              const robotTaskCode = await this.sendAgvCommand(
-                taskType,
-                fromSiteCode,
-                toSiteCode
-              );
-              if (robotTaskCode !== '') {
-                // 转盘-缓存区
-                const param = {
-                  id: res.data[0].id,
-                  trayInfo: '1111111',
-                  trayStatus: '0',
-                  robotTaskCode,
-                  trayInfoAdd: '临时托盘'
-                };
-                HttpUtil.post('/queue_info/update', param)
-                  .then((returnRes) => {
-                    if (returnRes.data == 1) {
-                      this.addLog(`手动调度去往缓存区：${toSiteCode}成功！`);
-                      this.$message.success(
-                        `手动调度去往缓存区：${toSiteCode}成功！`
-                      );
-                    } else {
-                      this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
-                      this.$message.error(
-                        `手动调度去往缓存区：${toSiteCode}失败！`
-                      );
-                    }
-                  })
-                  .catch((err) => {
-                    this.addLog(
-                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                    );
-                    this.$message.error(
-                      `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                    );
-                  });
-              }
-            } else {
-              this.$message.error(
-                `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
-              );
-              this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
-            }
-          } else {
-            this.addLog('没有此缓存区位置，请检查输入的缓存区位置是否正确');
-            this.$message.error(
-              '没有此缓存区位置，请检查输入的缓存区位置是否正确'
-            );
-          }
-        } else {
-          this.$message.error('未查到终点信息，请检查输入的终点位置是否正确');
-          this.addLog('未查到终点信息，请检查输入的终点位置是否正确');
-        }
+      const startPos = this.agvSchedule.startPosition.trim().toUpperCase();
+      const endPos = this.agvSchedule.endPosition.trim().toUpperCase();
+
+      // 情况1：AGV5-1（101）To H1 H2 ... H8，taskType：PF-FMR-COMMON-JH11
+      if (startPos === 'AGV5-1' && this.isHPosition(endPos)) {
+        await this.handleAgv5ToH(startPos, endPos);
+      }
+      // 情况2：H1 H2 ... H8 To 25001-25013，taskType：PF-FMR-STACK-ALGO-QC
+      else if (this.isHPosition(startPos) && this.isStackPosition(endPos)) {
+        await this.handleHToStack(startPos, endPos);
       } else {
-        // 说明起点不是AGV5-1，判断起点是否包含H
-        if (this.agvSchedule.startPosition.includes('H')) {
-          // 说明起点是来料缓存区
-          fromSiteCode = this.agvCodeMap[this.agvSchedule.startPosition];
-          if (this.agvSchedule.endPosition.includes('H')) {
-            // 说明终点是缓存区，此为缓存区到缓存区PF-FMR-COMMON-JH8
-            taskType = 'PF-FMR-COMMON-JH8';
-            toSiteCode = this.agvSchedule.endPosition;
-            // 判断目的地缓存位有没有托盘占位，如果有直接报错提示，并返回
-            const res = await HttpUtil.post('/queue_info/queryQueueList', {
-              // toSiteCode的格式是C1,C2... 截取toSiteCode第一位为queueName，后面为queueNum
-              queueName: toSiteCode.charAt(0),
-              queueNum: toSiteCode.substring(1)
-            });
-            if (res.data && res.data.length > 0) {
-              if (
-                res.data[0].trayInfo === null ||
-                res.data[0].trayInfo === ''
-              ) {
-                this.agvSchedule.status = 'singleRunning';
-                // 调用发送AGV指令方法
-                const robotTaskCode = await this.sendAgvCommand(
-                  taskType,
-                  fromSiteCode,
-                  toSiteCode
-                );
-                if (robotTaskCode !== '') {
-                  // 转盘-缓存区
-                  const param = {
-                    id: res.data[0].id,
-                    trayInfo: '1111111',
-                    trayStatus: '0',
-                    robotTaskCode,
-                    trayInfoAdd: '临时托盘'
-                  };
-                  HttpUtil.post('/queue_info/update', param)
-                    .then((returnRes) => {
-                      if (returnRes.data == 1) {
-                        this.addLog(`手动调度去往缓存区：${toSiteCode}成功！`);
-                        this.$message.success(
-                          `手动调度去往缓存区：${toSiteCode}成功！`
-                        );
-                      } else {
-                        this.addLog(`手动调度去往缓存区：${toSiteCode}失败！`);
-                        this.$message.error(
-                          `手动调度去往缓存区：${toSiteCode}失败！`
-                        );
-                      }
-                    })
-                    .catch((err) => {
-                      this.addLog(
-                        `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                      );
-                      this.$message.error(
-                        `手动调度去往缓存区：${toSiteCode}失败！${err}`
-                      );
-                    });
-                }
-              } else {
-                this.$message.error(
-                  `目的地：${toSiteCode}缓存位有托盘占位，请检查。`
-                );
-                this.addLog(`目的地：${toSiteCode}缓存位有托盘占位，请检查。`);
-              }
-            } else {
-              this.addLog('没有此缓存区位置，请检查输入的缓存区位置是否正确');
-              this.$message.error(
-                '没有此缓存区位置，请检查输入的缓存区位置是否正确'
-              );
-            }
-          }
-        } else {
-          // 无法判断起点是什么
-          this.$message.error('无起点点位，请检查输入的起点位置是否正确');
-        }
+        this.$message.warning('不支持的操作路径，请检查起点和终点');
+        this.addLog('不支持的操作路径，请检查起点和终点');
       }
     },
+
+    // 判断是否为H1-H8位置
+    isHPosition(position) {
+      return /^H[1-8]$/i.test(position);
+    },
+
+    // 判断是否为25001-25013堆栈位置
+    isStackPosition(position) {
+      return /^250(0[1-9]|1[0-3])$/i.test(position);
+    },
+
+    // 处理AGV5-1到H1-H8的情况
+    async handleAgv5ToH(startPos, endPos) {
+      this.agvSchedule.status = 'singleRunning';
+
+      try {
+        // 发送AGV指令
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-COMMON-JH11',
+          '101', // AGV5-1对应的站点码
+          endPos
+        );
+
+        // 显示AGV接口返回信息
+        if (robotTaskCode !== '') {
+          console.log(
+            `AGV5-1到${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+          this.addLog(
+            `AGV5-1到${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+          this.$message.success(`AGV指令发送成功，任务码：${robotTaskCode}`);
+        } else {
+          console.log(`AGV5-1到${endPos}指令发送失败`);
+          this.addLog(`AGV5-1到${endPos}指令发送失败`);
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (e) {
+        console.log(`AGV5-1到${endPos}指令发送异常：${e}`);
+        this.addLog(`AGV5-1到${endPos}指令发送异常：${e}`);
+        this.$message.error('AGV指令发送异常');
+      } finally {
+        // 重置状态
+        this.agvSchedule.status = 'idle';
+      }
+    },
+
+    // 处理H1-H8到25001-25013的情况
+    async handleHToStack(startPos, endPos) {
+      this.agvSchedule.status = 'singleRunning';
+
+      try {
+        // 发送AGV指令
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-STACK-ALGO-QC',
+          startPos,
+          endPos
+        );
+
+        // 显示AGV接口返回信息
+        if (robotTaskCode !== '') {
+          console.log(
+            `从${startPos}到${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+          this.addLog(
+            `从${startPos}到${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+          this.$message.success(`AGV指令发送成功，任务码：${robotTaskCode}`);
+        } else {
+          console.log(`从${startPos}到${endPos}指令发送失败`);
+          this.addLog(`从${startPos}到${endPos}指令发送失败`);
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (e) {
+        console.log(`从${startPos}到${endPos}指令发送异常：${e}`);
+        this.addLog(`从${startPos}到${endPos}指令发送异常：${e}`);
+        this.$message.error('AGV指令发送异常');
+      } finally {
+        // 重置状态
+        this.agvSchedule.status = 'idle';
+      }
+    },
+
     stopAgvSchedule() {
       if (this.agvSchedule.status === 'cycleRunning') {
         this.agvSchedule.status = 'idle';
@@ -1499,16 +1476,31 @@ export default {
       //   `发送AGV指令: 类型=${taskType}, 起点=${fromSiteCode}, 终点=${toSiteCode}`
       // );
       // return Date.now().toString();
+
+      // 根据巷道类型确定type值
+      const getRouteType = (siteCode) => {
+        // H1-H8 巷道使用 SITE 类型
+        if (this.isHPosition(siteCode)) {
+          return 'SITE';
+        }
+        // 25001-25013 巷道使用 STACK 类型
+        if (this.isStackPosition(siteCode)) {
+          return 'STACK';
+        }
+        // 其他位置默认为 SITE 类型
+        return 'SITE';
+      };
+
       // 组装入参
       const params = {
         taskType: taskType,
         targetRoute: [
           {
-            type: 'SITE',
+            type: getRouteType(fromSiteCode),
             code: fromSiteCode
           },
           {
-            type: 'SITE',
+            type: getRouteType(toSiteCode),
             code: toSiteCode
           }
         ]
@@ -1580,83 +1572,6 @@ export default {
       return (item) => {
         return item.value.toLowerCase().indexOf(queryString.toLowerCase()) > 0;
       };
-    },
-    handleExecutePallet(item) {
-      if (!item.targetPosition) {
-        this.$message.warning('请选择目的地');
-        return;
-      }
-
-      // 发送托盘至选定目的地的逻辑
-      this.$confirm(
-        `确认将托盘 ${item.trayInfo} 发送至 ${item.targetPosition} 吗？`,
-        '提示',
-        {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }
-      )
-        .then(() => {
-          // 执行发送逻辑
-          this.sendPalletToDestination(item, item.targetPosition);
-        })
-        .catch(() => {});
-    },
-
-    sendPalletToDestination(item, destination) {
-      // 根据托盘信息给AGV小车发送指令
-      this.addLog(
-        `正在发送托盘 ${item.trayInfo} 至 ${destination}...先途径AGV2-2...`
-      );
-
-      // 显示加载状态
-      this.$set(item, 'showSendPanel', false);
-
-      // 调用发送AGV指令方法，确定任务类型和起点终点
-      const taskType = 'PF-FMR-COMMON-JH2'; // 假设是从缓存区到输送线
-      const fromSiteCode = item.queueName + item.queueNum;
-
-      this.sendAgvCommand(taskType, fromSiteCode, '201')
-        .then((robotTaskCode) => {
-          if (robotTaskCode) {
-            // 更新托盘状态为正在发送中
-            const param = {
-              id: item.id,
-              trayStatus: '3', // -在缓存区等待AGV取货
-              robotTaskCode,
-              targetPosition: destination // 保存目的地信息
-            };
-
-            HttpUtil.post('/queue_info/update', param)
-              .then((res) => {
-                if (res.data == 1) {
-                  this.$message.success(`托盘已发送至 ${destination}`);
-                  this.addLog(`托盘 ${item.trayInfo} 已发送至 ${destination}`);
-                  // 更新本地item的状态
-                  this.$set(item, 'trayStatus', '3');
-                  this.$set(item, 'targetPosition', destination);
-                  // 重新加载当前区域数据
-                  this.loadPalletStorageByArea(this.currentStorageArea);
-                }
-              })
-              .catch((err) => {
-                this.$message.error('托盘状态更新失败，请重试');
-                this.addLog(`托盘状态更新失败：${err}`);
-                // 恢复发送面板状态
-                this.$set(item, 'showSendPanel', true);
-              });
-          } else {
-            this.$message.error('AGV指令发送失败');
-            // 恢复发送面板状态
-            this.$set(item, 'showSendPanel', true);
-          }
-        })
-        .catch((err) => {
-          this.$message.error(`发送指令失败: ${err}`);
-          // 恢复发送面板状态
-          this.$set(item, 'showSendPanel', true);
-        });
     },
     // --- 托盘移动功能方法 START ---
     handleOpenMovePalletDialog(item) {
@@ -1997,216 +1912,6 @@ export default {
         .finally(() => {
           this.batchUnlockLoading = false;
         });
-    },
-
-    // 启动定时器
-    startAgvTimer() {
-      // 每1秒扫描一次解锁的托盘
-      this.agvTimerInterval = setInterval(() => {
-        this.processPendingPallets();
-      }, 2000);
-    },
-
-    // 停止定时器
-    stopAgvTimer() {
-      if (this.agvTimerInterval) {
-        clearInterval(this.agvTimerInterval);
-        this.agvTimerInterval = null;
-      }
-    },
-
-    // 处理待发送的托盘
-    processPendingPallets() {
-      // 查询来料缓存区中已经解锁且状态为''的托盘
-      HttpUtil.post('/queue_info/queryQueueList', {
-        queueName: 'H'
-      })
-        .then(async (res) => {
-          if (res.data && res.data.length > 0) {
-            // 筛选出解锁且状态为''的托盘
-            const unlockdPallets = res.data.filter(
-              (item) =>
-                item.trayInfo &&
-                item.isLock !== '1' &&
-                item.trayStatus === '2' &&
-                parseInt(item.queueNum) >= 1 &&
-                parseInt(item.queueNum) <= 20 &&
-                item.mudidi // 确保有目的地
-            );
-
-            // 如果有待处理的托盘，处理第一个
-            if (unlockdPallets.length > 0) {
-              await this.sendPalletToDestinationByQueue(unlockdPallets[0]);
-            }
-          }
-        })
-        .catch((err) => {
-          console.error('查询H队列托盘情况失败:', err);
-        });
-    },
-
-    // 根据目的地发送托盘到相应队列
-    async sendPalletToDestinationByQueue(pallet) {
-      // 根据目的地选择不同的队列范围
-      let queueRange = {
-        start: 0,
-        end: 0
-      };
-
-      // 设置对应目的地的队列范围
-      switch (pallet.mudidi) {
-        case '2500-1':
-          queueRange.start = 21;
-          queueRange.end = 49;
-          break;
-        case '2500-2':
-          queueRange.start = 50;
-          queueRange.end = 69;
-          break;
-        case '2500-3':
-          queueRange.start = 70;
-          queueRange.end = 99;
-          break;
-        case '2500-4':
-          queueRange.start = 150;
-          queueRange.end = 199;
-          break;
-        case '2500-5':
-          queueRange.start = 100;
-          queueRange.end = 119;
-          break;
-        default:
-          this.addLog(
-            `托盘${pallet.trayInfo}的目的地${pallet.mudidi}不正确，无法发送`
-          );
-          return;
-      }
-
-      // 查找目标区域的空闲位置
-      try {
-        const response = await HttpUtil.post('/queue_info/queryQueueList', {
-          queueName: 'H'
-        });
-
-        if (response.data && response.data.length > 0) {
-          let targetPosition = null;
-
-          // 对于2500-1和2500-4，按照序号顺序发送
-          if (pallet.mudidi === '2500-1' || pallet.mudidi === '2500-4') {
-            // 检查当前序号是否已达到最大值
-            if (this.currentSendIndex[pallet.mudidi] > queueRange.end) {
-              // 检查该区域是否全部为空
-              const areaItems = response.data.filter(
-                (item) =>
-                  parseInt(item.queueNum) >= queueRange.start &&
-                  parseInt(item.queueNum) <= queueRange.end
-              );
-
-              const hasOccupied = areaItems.some(
-                (item) => item.trayInfo && item.trayInfo !== ''
-              );
-
-              if (!hasOccupied) {
-                // 全部为空，重置序号从第一个开始
-                this.currentSendIndex[pallet.mudidi] = queueRange.start;
-                this.addLog(
-                  `${pallet.mudidi}区域缓存位全部为空，重置序号从${queueRange.start}开始`
-                );
-              } else {
-                // 还有占用的位置，不发送
-                this.addLog(
-                  `定时器扫描：${pallet.mudidi}区域已发送到最后一个序号${queueRange.end}，等待缓存位全部为空后重新开始`
-                );
-                return;
-              }
-            }
-
-            // 查找当前序号的位置
-            const currentIndexPosition = response.data.find(
-              (item) =>
-                parseInt(item.queueNum) ===
-                  this.currentSendIndex[pallet.mudidi] && item.queueName === 'H'
-            );
-
-            if (currentIndexPosition) {
-              // 检查当前序号位置是否被占用
-              if (
-                (currentIndexPosition.trayInfo === null ||
-                  currentIndexPosition.trayInfo === '') &&
-                currentIndexPosition.isLock !== '1'
-              ) {
-                targetPosition = currentIndexPosition;
-              } else {
-                // 位置被占用，序号+1，等待下次扫描
-                this.currentSendIndex[pallet.mudidi]++;
-                this.addLog(
-                  `定时器扫描：${pallet.mudidi}区域H${
-                    this.currentSendIndex[pallet.mudidi] - 1
-                  }位置被占用，序号+1至H${this.currentSendIndex[pallet.mudidi]}`
-                );
-                return;
-              }
-            }
-          } else {
-            // 其他目的地按原逻辑查找第一个空闲位置
-            targetPosition = response.data.find(
-              (item) =>
-                (item.trayInfo === null || item.trayInfo === '') &&
-                item.isLock !== '1' &&
-                parseInt(item.queueNum) >= queueRange.start &&
-                parseInt(item.queueNum) <= queueRange.end
-            );
-          }
-
-          if (targetPosition) {
-            // 发送AGV命令
-            const robotTaskCode = await this.sendAgvCommand(
-              'PF-FMR-COMMON-JH8', // 从缓存区到指定位置
-              pallet.queueName + pallet.queueNum, // 源位置
-              targetPosition.queueName + targetPosition.queueNum // 目标位置
-            );
-
-            if (robotTaskCode !== '') {
-              // 更新源托盘状态
-              await HttpUtil.post('/queue_info/updateByList', [
-                {
-                  id: pallet.id,
-                  trayStatus: '3', // 3- 在来料缓存区等待取货
-                  robotTaskCode,
-                  targetPosition:
-                    targetPosition.queueName + targetPosition.queueNum,
-                  targetId: targetPosition.id
-                },
-                {
-                  id: targetPosition.id, // 给目标位置上个锁
-                  isLock: '1'
-                }
-              ]).then((res) => {
-                this.addLog(
-                  `定时器扫描：托盘${pallet.trayInfo}已从${pallet.queueName}${pallet.queueNum}发送至${pallet.mudidi}区域的${targetPosition.queueName}${targetPosition.queueNum}`
-                );
-
-                // 对于2500-1和2500-4，序号+1
-                if (pallet.mudidi === '2500-1' || pallet.mudidi === '2500-4') {
-                  this.currentSendIndex[pallet.mudidi]++;
-                  this.addLog(
-                    `${pallet.mudidi}区域下次发送序号更新为H${
-                      this.currentSendIndex[pallet.mudidi]
-                    }`
-                  );
-                }
-              });
-            }
-          } else {
-            this.addLog(
-              `定时器扫描：无法发送托盘${pallet.trayInfo}，${pallet.mudidi}区域(H${queueRange.start}-H${queueRange.end})没有空闲位置`
-            );
-          }
-        }
-      } catch (err) {
-        this.addLog(`发送托盘${pallet.trayInfo}失败: ${err}`);
-        console.error(`发送托盘${pallet.trayInfo}失败:`, err);
-      }
     },
 
     // ============ WebSocket相关方法 ============

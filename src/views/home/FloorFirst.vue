@@ -374,14 +374,20 @@
                   >{{ arm.name }}</span
                 >
                 <div
-                  class="data-panel data-panel-mechanical-arm"
-                  :class="[
-                    `position-${arm.position}`,
-                    { 'show-panel': visibleArmPanels.includes(arm.name) }
-                  ]"
+                  v-if="visibleArmPanels.includes(arm.name)"
+                  class="data-panel data-panel-mechanical-arm show-panel"
+                  :class="[`position-${arm.position}`]"
                 >
                   <div class="data-panel-header">
                     <span>机械臂{{ arm.name }}</span>
+                    <el-button
+                      type="text"
+                      size="mini"
+                      @click.stop="clearArmQueue(arm.name)"
+                      style="margin-left: 10px; color: #f56c6c; padding: 0"
+                    >
+                      清理
+                    </el-button>
                   </div>
                   <div class="data-panel-content">
                     <div class="data-panel-row">
@@ -1538,7 +1544,7 @@ export default {
           status: 0,
           currentPallet: null,
           currentDesc: null,
-          position: 'top-left'
+          position: 'bottom-left'
         },
         {
           name: 'b1',
@@ -1547,7 +1553,7 @@ export default {
           status: 0,
           currentPallet: null,
           currentDesc: null,
-          position: 'top-right'
+          position: 'left'
         },
         {
           name: 'c1',
@@ -1556,7 +1562,7 @@ export default {
           status: 0,
           currentPallet: null,
           currentDesc: null,
-          position: 'left'
+          position: 'bottom-right'
         },
         {
           name: 'd1',
@@ -1565,7 +1571,7 @@ export default {
           status: 0,
           currentPallet: null,
           currentDesc: null,
-          position: 'bottom-left'
+          position: 'top-left'
         },
         {
           name: 'e1',
@@ -1574,7 +1580,7 @@ export default {
           status: 0,
           currentPallet: null,
           currentDesc: null,
-          position: 'bottom-right'
+          position: 'right'
         },
         {
           name: 'a2',
@@ -1592,7 +1598,7 @@ export default {
           status: 0,
           currentPallet: null,
           currentDesc: null,
-          position: 'top-right'
+          position: 'right'
         },
         {
           name: 'c2',
@@ -2774,6 +2780,77 @@ export default {
       );
       return !!(arm && arm.currentPallet);
     },
+    // 清理机械臂队列
+    async clearArmQueue(armName) {
+      try {
+        await this.$confirm(
+          `确认清理机械臂${armName}的队列数据吗？此操作将解绑AGV并删除队列记录。`,
+          '确认清理',
+          {
+            confirmButtonText: '确定清理',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        );
+
+        // 获取机械臂位置的站点ID
+        const stationId = this.convertToStationId(armName);
+        this.addLog(`开始清理机械臂${armName}队列，站点ID：${stationId}`);
+
+        // 1. 先发送AGV解绑接口
+        const unbindSuccess = await this.sendAgvUnbindCommand(stationId);
+        if (!unbindSuccess) {
+          this.addLog(`机械臂${armName} AGV解绑失败，但将继续清理队列数据`);
+          this.$message.warning('AGV解绑失败，但将继续清理队列数据');
+        } else {
+          this.addLog(`机械臂${armName} AGV解绑成功`);
+        }
+
+        // 2. 查询并清理机械臂队列数据
+        const queueRes = await HttpUtil.post('/queue_info/queryQueueList', {
+          queueName: armName.charAt(0),
+          queueNum: armName.substring(1)
+        });
+
+        if (queueRes.data && queueRes.data.length > 0) {
+          const queueItem = queueRes.data[0];
+          const updateParam = {
+            id: queueItem.id,
+            trayInfo: '',
+            trayStatus: '',
+            robotTaskCode: '',
+            trayInfoAdd: '',
+            targetPosition: '',
+            isWaitCancel: '',
+            isLock: '',
+            mudidi: '',
+            targetId: ''
+          };
+
+          await HttpUtil.post('/queue_info/update', updateParam);
+
+          this.addLog(
+            `机械臂${armName}队列数据已清理，托盘：${
+              queueItem.trayInfo || '无'
+            }`
+          );
+          this.$message.success(`机械臂${armName}队列已清理完成`);
+
+          // 刷新机械臂数据
+          this.pollForPalletsToMove();
+        } else {
+          this.addLog(`机械臂${armName}队列无数据需要清理`);
+          this.$message.info(`机械臂${armName}队列无数据需要清理`);
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          this.addLog(
+            `清理机械臂${armName}队列失败：${error.message || '未知错误'}`
+          );
+          this.$message.error(`清理失败：${error.message || '未知错误'}`);
+        }
+      }
+    },
     switchStorageArea(area) {
       this.currentStorageArea = area;
       // 切换区域时重新加载数据
@@ -3293,7 +3370,17 @@ export default {
       HttpUtil.post('/queue_info/queryQueueList', {}).then((res) => {
         if (res && res.data.length > 0) {
           // 同步各机械臂位置信息（a1、b1、d1、e1、a2、b2、d2：取该队列第一个有托盘的记录）
-          const armAreas = ['a1', 'b1', 'd1', 'e1', 'a2', 'b2', 'd2'];
+          const armAreas = [
+            'a1',
+            'b1',
+            'd1',
+            'e1',
+            'a2',
+            'b2',
+            'd2',
+            'c1',
+            'c2'
+          ];
           armAreas.forEach((area) => {
             const list = res.data
               .filter((x) => x.queueName + x.queueNum == area)
@@ -3752,6 +3839,18 @@ export default {
           }
         }
 
+        // 先发送c1 c2绑定接口
+        const stationId = this.convertToStationId(position);
+        this.addLog(`c1 c2请求清理发送到输送线，先发送绑定接口：${stationId}`);
+
+        const bindSuccess = await this.sendAgvBindCommand(stationId);
+        if (!bindSuccess) {
+          this.addLog(`AGV绑定失败，但将继续发送AGV指令`);
+          this.$message.warning('AGV绑定失败，但将继续发送AGV指令');
+        } else {
+          this.addLog(`AGV绑定成功：${stationId}`);
+        }
+
         // 直接发送到AGV2-2输送线
         const fromSiteCode = position.toUpperCase(); // 例如：C1, C2
         const toSiteCode = '201'; // AGV2-2输送线站点ID
@@ -4013,7 +4112,24 @@ export default {
           }
         }
 
-        // 2. 发送AGV指令
+        // 2. 如果是A区发到c1或c2，先发送解绑接口
+        if (
+          fromSiteCode.startsWith('A') &&
+          (targetPosition === 'c1' || targetPosition === 'c2')
+        ) {
+          const stationId = this.convertToStationId(targetPosition);
+          this.addLog(`A区发到${targetPosition}，先发送解绑接口：${stationId}`);
+
+          const unbindSuccess = await this.sendAgvUnbindCommand(stationId);
+          if (!unbindSuccess) {
+            this.addLog(`AGV解绑失败，但将继续发送AGV指令`);
+            this.$message.warning('AGV解绑失败，但将继续发送AGV指令');
+          } else {
+            this.addLog(`AGV解绑成功：${stationId}`);
+          }
+        }
+
+        // 3. 发送AGV指令
         const robotTaskCode = await this.sendAgvCommand(
           taskType,
           fromSiteCode,
@@ -4021,7 +4137,7 @@ export default {
         );
 
         if (robotTaskCode && robotTaskCode !== '') {
-          // 3. 如果有队列数据，一起处理队列数据
+          // 4. 如果有队列数据，一起处理队列数据
           if (queueDataToProcess) {
             await this.updateQueueDataWithAgvTask(
               queueDataToProcess,
