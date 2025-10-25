@@ -4100,22 +4100,22 @@ export default {
           }
         }
 
-        // 2. 如果是A区发到c1或c2，先发送解绑接口
-        if (
-          fromSiteCode.startsWith('A') &&
-          (targetPosition === 'c1' || targetPosition === 'c2')
-        ) {
-          const stationId = this.convertToStationId(targetPosition);
-          this.addLog(`A区发到${targetPosition}，先发送解绑接口：${stationId}`);
+        // 2. 如果是A区发到c1或c2，先发送解绑接口，先注释掉，万一后面用呢
+        // if (
+        //   fromSiteCode.startsWith('A') &&
+        //   (targetPosition === 'c1' || targetPosition === 'c2')
+        // ) {
+        //   const stationId = this.convertToStationId(targetPosition);
+        //   this.addLog(`A区发到${targetPosition}，先发送解绑接口：${stationId}`);
 
-          const unbindSuccess = await this.sendAgvUnbindCommand(stationId);
-          if (!unbindSuccess) {
-            this.addLog(`AGV解绑失败，但将继续发送AGV指令`);
-            this.$message.warning('AGV解绑失败，但将继续发送AGV指令');
-          } else {
-            this.addLog(`AGV解绑成功：${stationId}`);
-          }
-        }
+        //   const unbindSuccess = await this.sendAgvUnbindCommand(stationId);
+        //   if (!unbindSuccess) {
+        //     this.addLog(`AGV解绑失败，但将继续发送AGV指令`);
+        //     this.$message.warning('AGV解绑失败，但将继续发送AGV指令');
+        //   } else {
+        //     this.addLog(`AGV解绑成功：${stationId}`);
+        //   }
+        // }
 
         // 3. 发送AGV指令
         const robotTaskCode = await this.sendAgvCommand(
