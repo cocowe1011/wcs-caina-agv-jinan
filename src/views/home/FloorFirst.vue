@@ -3751,6 +3751,14 @@ export default {
             );
             return;
           }
+
+          // 检查当前队列是否有托盘信息，如果没有托盘信息则不执行AGV任务
+          if (!robotQueue.trayInfo || robotQueue.trayInfo.trim() === '') {
+            this.addLog(
+              `${robotNum}#机器人${position.toUpperCase()}位置当前队列没有托盘信息，跳过空托盘清理处理`
+            );
+            return;
+          }
         }
 
         // 查询z队列，找到第一个不是状态15（集满）的位置
