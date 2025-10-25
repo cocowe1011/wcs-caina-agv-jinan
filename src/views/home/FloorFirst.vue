@@ -3839,18 +3839,6 @@ export default {
           }
         }
 
-        // 先发送c1 c2绑定接口
-        const stationId = this.convertToStationId(position);
-        this.addLog(`c1 c2请求清理发送到输送线，先发送绑定接口：${stationId}`);
-
-        const bindSuccess = await this.sendAgvBindCommand(stationId);
-        if (!bindSuccess) {
-          this.addLog(`AGV绑定失败，但将继续发送AGV指令`);
-          this.$message.warning('AGV绑定失败，但将继续发送AGV指令');
-        } else {
-          this.addLog(`AGV绑定成功：${stationId}`);
-        }
-
         // 直接发送到AGV2-2输送线
         const fromSiteCode = position.toUpperCase(); // 例如：C1, C2
         const toSiteCode = '201'; // AGV2-2输送线站点ID
