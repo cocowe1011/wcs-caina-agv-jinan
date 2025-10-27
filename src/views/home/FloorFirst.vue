@@ -3367,93 +3367,97 @@ export default {
     },
     // 轮询C区有没有能够移到AGV2-2队列的托盘
     pollForPalletsToMove() {
-      HttpUtil.post('/queue_info/queryQueueList', {}).then((res) => {
-        if (res && res.data.length > 0) {
-          // 同步各机械臂位置信息（a1、b1、d1、e1、a2、b2、d2：取该队列第一个有托盘的记录）
-          const armAreas = [
-            'a1',
-            'b1',
-            'd1',
-            'e1',
-            'a2',
-            'b2',
-            'd2',
-            'c1',
-            'c2'
-          ];
-          armAreas.forEach((area) => {
-            const list = res.data
-              .filter((x) => x.queueName + x.queueNum == area)
-              .sort((a, b) => (a.queueNum || 0) - (b.queueNum || 0));
-            const firstWithPallet = list.find(
-              (x) => x.trayInfo && x.trayInfo !== ''
-            );
-            const idx = this.mechanicalArms.findIndex(
-              (m) => m.name.toLowerCase() == area
-            );
-            if (idx !== -1) {
-              this.$set(
-                this.mechanicalArms[idx],
-                'currentPallet',
-                firstWithPallet ? firstWithPallet.trayInfo : null
+      HttpUtil.post('/queue_info/queryQueueList', {})
+        .then((res) => {
+          if (res && res.data.length > 0) {
+            // 同步各机械臂位置信息（a1、b1、d1、e1、a2、b2、d2：取该队列第一个有托盘的记录）
+            const armAreas = [
+              'a1',
+              'b1',
+              'd1',
+              'e1',
+              'a2',
+              'b2',
+              'd2',
+              'c1',
+              'c2'
+            ];
+            armAreas.forEach((area) => {
+              const list = res.data
+                .filter((x) => x.queueName + x.queueNum == area)
+                .sort((a, b) => (a.queueNum || 0) - (b.queueNum || 0));
+              const firstWithPallet = list.find(
+                (x) => x.trayInfo && x.trayInfo !== ''
               );
-              this.$set(
-                this.mechanicalArms[idx],
-                'currentDesc',
-                firstWithPallet ? firstWithPallet.trayInfoAdd : null
+              const idx = this.mechanicalArms.findIndex(
+                (m) => m.name.toLowerCase() == area
               );
+              if (idx !== -1) {
+                this.$set(
+                  this.mechanicalArms[idx],
+                  'currentPallet',
+                  firstWithPallet ? firstWithPallet.trayInfo : null
+                );
+                this.$set(
+                  this.mechanicalArms[idx],
+                  'currentDesc',
+                  firstWithPallet ? firstWithPallet.trayInfoAdd : null
+                );
+              }
+            });
+            // 过滤出C队列状态为5的托盘
+            const status5PalletsC = res.data.filter(
+              (item) => item.trayStatus === '5' && item.queueName === 'C'
+            );
+            if (status5PalletsC.length > 0) {
+              this.insertPalletToAGV(status5PalletsC, 'AGV2-2');
             }
-          });
-          // 过滤出C队列状态为5的托盘
-          const status5PalletsC = res.data.filter(
-            (item) => item.trayStatus === '5' && item.queueName === 'C'
-          );
-          if (status5PalletsC.length > 0) {
-            this.insertPalletToAGV(status5PalletsC, 'AGV2-2');
-          }
-          // 过滤出E队列状态为5的托盘
-          const status5PalletsE = res.data.filter(
-            (item) => item.trayStatus === '5' && item.queueName === 'B'
-          );
-          if (status5PalletsE.length > 0) {
-            this.insertPalletToAGV(status5PalletsE, 'AGV2-3');
-          }
-          // 过滤出AGV2-2队列状态为7的托盘
-          const status7Pallet2 = res.data.filter(
-            (item) => item.trayStatus === '7' && item.queueName === 'AGV2-2'
-          );
-          if (status7Pallet2.length > 0) {
-            this.deletePalletsWithStatus7(status7Pallet2, 'AGV2-2');
-          }
-          // 过滤出AGV2-3队列状态为7的托盘
-          const status7Pallets3 = res.data.filter(
-            (item) => item.trayStatus === '7' && item.queueName === 'AGV2-3'
-          );
-          if (status7Pallets3.length > 0) {
-            this.deletePalletsWithStatus7(status7Pallets3, 'AGV2-3');
-          }
+            // 过滤出E队列状态为5的托盘
+            const status5PalletsE = res.data.filter(
+              (item) => item.trayStatus === '5' && item.queueName === 'B'
+            );
+            if (status5PalletsE.length > 0) {
+              this.insertPalletToAGV(status5PalletsE, 'AGV2-3');
+            }
+            // 过滤出AGV2-2队列状态为7的托盘
+            const status7Pallet2 = res.data.filter(
+              (item) => item.trayStatus === '7' && item.queueName === 'AGV2-2'
+            );
+            if (status7Pallet2.length > 0) {
+              this.deletePalletsWithStatus7(status7Pallet2, 'AGV2-2');
+            }
+            // 过滤出AGV2-3队列状态为7的托盘
+            const status7Pallets3 = res.data.filter(
+              (item) => item.trayStatus === '7' && item.queueName === 'AGV2-3'
+            );
+            if (status7Pallets3.length > 0) {
+              this.deletePalletsWithStatus7(status7Pallets3, 'AGV2-3');
+            }
 
-          // 处理机械臂队列状态为25的托盘（已送至机械臂目的地，需发送送货完成信号）
-          this.handleStatus25RobotPallets(res.data);
+            // 处理机械臂队列状态为25的托盘（已送至机械臂目的地，需发送送货完成信号）
+            this.handleStatus25RobotPallets(res.data);
 
-          // 处理z队列状态为13的托盘（已送至空托盘区域，需发送清理完成信号）
-          this.handleStatus13EmptyPallets(res.data);
+            // 处理z队列状态为13的托盘（已送至空托盘区域，需发送清理完成信号）
+            this.handleStatus13EmptyPallets(res.data);
 
-          // 处理z队列状态为15的托盘（空托盘区域集满，需发送到AGV2-2输送线）
-          this.handleFullEmptyPalletArea(res.data);
+            // 处理z队列状态为15的托盘（空托盘区域集满，需发送到AGV2-2输送线）
+            this.handleFullEmptyPalletArea(res.data);
 
-          // 处理z队列状态为18的托盘（空托盘已送至输送线，插入AGV2-2队列）
-          const status18PalletsZ = res.data.filter(
-            (item) => item.trayStatus === '18' && item.queueName === 'z'
-          );
-          if (status18PalletsZ.length > 0) {
-            this.insertPalletToAGV(status18PalletsZ, 'AGV2-2');
+            // 处理z队列状态为18的托盘（空托盘已送至输送线，插入AGV2-2队列）
+            const status18PalletsZ = res.data.filter(
+              (item) => item.trayStatus === '18' && item.queueName === 'z'
+            );
+            if (status18PalletsZ.length > 0) {
+              this.insertPalletToAGV(status18PalletsZ, 'AGV2-2');
+            }
+
+            // 处理机械臂c1/c2队列状态为19的托盘（杂物托盘已送至输送线，插入AGV2-2队列并发送清理完成信号）
+            this.handleStatus19DebrisPallets(res.data);
           }
-
-          // 处理机械臂c1/c2队列状态为19的托盘（杂物托盘已送至输送线，插入AGV2-2队列并发送清理完成信号）
-          this.handleStatus19DebrisPallets(res.data);
-        }
-      });
+        })
+        .catch((err) => {
+          this.addLog(`轮询队列数据失败：${err}`);
+        });
     },
     // 预留处理状态为7的托盘的删除方法
     deletePalletsWithStatus7(pallets, queueName) {
@@ -3767,9 +3771,9 @@ export default {
         });
 
         if (res.code === '200' && res.data && res.data.length > 0) {
-          // 找到第一个状态不是15的位置
+          // 找到第一个状态不是15，并且没有被锁定的的位置
           const availablePosition = res.data.find(
-            (item) => item.trayStatus !== '15'
+            (item) => item.trayStatus !== '15' && item.isLock !== '1'
           );
 
           if (availablePosition) {
@@ -3814,7 +3818,9 @@ export default {
                 });
             }
           } else {
-            this.addLog(`z队列所有位置都已集满（状态15），无法清理空托盘。`);
+            this.addLog(
+              `z队列所有位置都已正在执行任务，或者为集满（状态15），无法清理空托盘。请耐心等待。`
+            );
           }
         }
       } catch (err) {

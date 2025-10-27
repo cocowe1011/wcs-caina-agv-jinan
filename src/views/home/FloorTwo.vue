@@ -1376,6 +1376,10 @@ export default {
       // 情况2：H1 H2 ... H8 To 25001-25013，taskType：PF-FMR-STACK-ALGO-QC
       else if (this.isHPosition(startPos) && this.isStackPosition(endPos)) {
         await this.handleHToStack(startPos, endPos);
+      }
+      // 情况3：K1 To K2，taskType：PF-FMR-COMMON-JH22
+      else if (startPos === 'K1' && endPos === 'K2') {
+        await this.handleK1ToK2(startPos, endPos);
       } else {
         this.$message.warning('不支持的操作路径，请检查起点和终点');
         this.addLog('不支持的操作路径，请检查起点和终点');
@@ -1436,6 +1440,42 @@ export default {
         // 发送AGV指令
         const robotTaskCode = await this.sendAgvCommand(
           'PF-FMR-STACK-ALGO-QC',
+          startPos,
+          endPos
+        );
+
+        // 显示AGV接口返回信息
+        if (robotTaskCode !== '') {
+          console.log(
+            `从${startPos}到${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+          this.addLog(
+            `从${startPos}到${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+          this.$message.success(`AGV指令发送成功，任务码：${robotTaskCode}`);
+        } else {
+          console.log(`从${startPos}到${endPos}指令发送失败`);
+          this.addLog(`从${startPos}到${endPos}指令发送失败`);
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (e) {
+        console.log(`从${startPos}到${endPos}指令发送异常：${e}`);
+        this.addLog(`从${startPos}到${endPos}指令发送异常：${e}`);
+        this.$message.error('AGV指令发送异常');
+      } finally {
+        // 重置状态
+        this.agvSchedule.status = 'idle';
+      }
+    },
+
+    // 处理K1到K2的情况
+    async handleK1ToK2(startPos, endPos) {
+      this.agvSchedule.status = 'singleRunning';
+
+      try {
+        // 发送AGV指令
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-COMMON-JH22',
           startPos,
           endPos
         );
