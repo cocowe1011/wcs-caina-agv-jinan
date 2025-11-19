@@ -693,13 +693,13 @@
               class="card-actions"
               v-if="
                 currentStorageTitle !== 'AGV2-2队列' &&
-                currentStorageTitle !== 'AGV2-3队列' &&
-                item.trayInfo
+                currentStorageTitle !== 'AGV2-3队列'
               "
             >
               <el-button
                 type="text"
                 size="mini"
+                v-if="item.trayInfo"
                 @click="handleOpenMovePalletDialog(item)"
               >
                 <i class="el-icon-s-promotion"></i>
@@ -709,6 +709,7 @@
                 type="text"
                 size="mini"
                 class="danger-button"
+                v-if="item.trayInfo || item.isLock === '1'"
                 @click="handleRemovePallet(item)"
               >
                 <i class="el-icon-delete"></i>
