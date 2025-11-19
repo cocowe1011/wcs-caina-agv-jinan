@@ -2211,7 +2211,12 @@ export default {
           this.addLog(`${queueName}托盘出库信息：${JSON.stringify(trayList)}`);
           // 调用AGV过来运货
           // 如果targetPosition不是D*，则默认D1
-          const targetPosition = trayList[0].targetPosition;
+          const targetPosition =
+            trayList[0].targetPosition &&
+            (trayList[0].targetPosition.startsWith('D') ||
+              trayList[0].targetPosition.startsWith('E'))
+              ? trayList[0].targetPosition
+              : 'D1';
 
           const robotTaskCode = await this.sendAgvCommand(
             'PF-FMR-COMMON-JH4',
