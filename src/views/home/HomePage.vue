@@ -75,10 +75,7 @@
                 v-if="userRole !== 'ADMIN'"
                 >修改密码</el-dropdown-item
               >
-              <el-dropdown-item
-                icon="el-icon-upload2"
-                command="logout"
-                v-if="userRole === 'ADMIN'"
+              <el-dropdown-item icon="el-icon-upload2" command="logout"
                 >退出登录</el-dropdown-item
               >
             </el-dropdown-menu>
@@ -101,11 +98,7 @@
             style="font-size: 18px; font-weight: 600"
           ></i>
         </div>
-        <div
-          class="maskDiv-top-close"
-          @click="closewindow"
-          v-if="userRole === 'ADMIN'"
-        >
+        <div class="maskDiv-top-close" @click="closewindow">
           <i
             class="el-icon-close"
             style="font-size: 18px; font-weight: 600"
@@ -146,6 +139,54 @@
         >
       </div>
     </el-dialog>
+
+    <!-- 管理员授权弹窗 -->
+    <el-dialog
+      title="退出授权验证"
+      :visible.sync="showAuthDialog"
+      width="460px"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <div class="auth-warning-tip">
+        <i class="el-icon-warning"></i>
+        <div class="auth-warning-text">
+          <span class="auth-warning-title">风险提示</span>
+          <span
+            >关闭系统将中断所有正在运行的任务，AGV调度将停止，请确认是否需要退出。</span
+          >
+        </div>
+      </div>
+      <el-form
+        :model="authForm"
+        ref="authForm"
+        :rules="authRules"
+        label-width="100px"
+      >
+        <el-form-item label="管理员账号" prop="adminCode">
+          <el-input
+            v-model="authForm.adminCode"
+            placeholder="请输入管理员账号"
+            @keyup.enter.native="confirmAuth"
+          ></el-input>
+        </el-form-item>
+        <el-form-item label="管理员密码" prop="adminPassword">
+          <el-input
+            v-model="authForm.adminPassword"
+            type="password"
+            placeholder="请输入管理员密码"
+            show-password
+            @keyup.enter.native="confirmAuth"
+          ></el-input>
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="cancelAuth">取 消</el-button>
+        <el-button type="primary" @click="confirmAuth" :loading="authLoading"
+          >确认授权</el-button
+        >
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -170,7 +211,22 @@ export default {
         newPassword: '',
         newPasswordAgain: ''
       },
-      userRole: ''
+      userRole: '',
+      showAuthDialog: false,
+      authLoading: false,
+      authAction: '', // 'close' 或 'logout'
+      authForm: {
+        adminCode: '',
+        adminPassword: ''
+      },
+      authRules: {
+        adminCode: [
+          { required: true, message: '请输入管理员账号', trigger: 'blur' }
+        ],
+        adminPassword: [
+          { required: true, message: '请输入管理员密码', trigger: 'blur' }
+        ]
+      }
     };
   },
   watch: {},
@@ -220,12 +276,12 @@ export default {
       }
     },
     closewindow() {
-      // 检查用户权限，只有管理员可以关闭系统
-      if (this.userRole !== 'ADMIN') {
-        this.$message.warning('操作员权限不足，无法关闭系统！');
+      if (this.userRole === 'ADMIN') {
+        ipcRenderer.send('close-window');
         return;
       }
-      ipcRenderer.send('close-window');
+      this.authAction = 'close';
+      this.showAuthDialog = true;
     },
     minWindow() {
       ipcRenderer.send('min-window');
@@ -262,18 +318,18 @@ export default {
     handelCommand(command) {
       switch (command) {
         case 'logout':
-          // 检查用户权限，只有管理员可以退出登录
-          if (this.userRole !== 'ADMIN') {
-            this.$message.warning('操作员权限不足，无法退出登录！');
+          if (this.userRole === 'ADMIN') {
+            this.$notify({
+              title: '已退出登录！',
+              message: '退出登录！',
+              type: 'success',
+              duration: 2000
+            });
+            this.logoutMethod();
             return;
           }
-          this.$notify({
-            title: '已退出登录！',
-            message: '退出登录！',
-            type: 'success',
-            duration: 2000
-          });
-          this.logoutMethod();
+          this.authAction = 'logout';
+          this.showAuthDialog = true;
           break;
         case 'updatePassword':
           this.$prompt('请输入注册账号时保存的姓名：', '敏感操作！验证用户！', {
@@ -324,6 +380,52 @@ export default {
     changeIcon() {
       ipcRenderer.on('mainWin-max', (e, status) => {
         this.windowSize = status;
+      });
+    },
+    cancelAuth() {
+      this.showAuthDialog = false;
+      this.authForm.adminCode = '';
+      this.authForm.adminPassword = '';
+      this.$nextTick(() => {
+        if (this.$refs.authForm) {
+          this.$refs.authForm.clearValidate();
+        }
+      });
+    },
+    confirmAuth() {
+      this.$refs.authForm.validate((valid) => {
+        if (!valid) return;
+        this.authLoading = true;
+        const param = {
+          userCode: this.authForm.adminCode,
+          userPassword: this.authForm.adminPassword
+        };
+        HttpUtil.post('/login/login', param)
+          .then((res) => {
+            this.authLoading = false;
+            if (res.data && res.data.userRole === 'ADMIN') {
+              this.showAuthDialog = false;
+              this.authForm.adminCode = '';
+              this.authForm.adminPassword = '';
+              if (this.authAction === 'close') {
+                ipcRenderer.send('close-window');
+              } else if (this.authAction === 'logout') {
+                this.$notify({
+                  title: '已退出登录！',
+                  message: '退出登录！',
+                  type: 'success',
+                  duration: 2000
+                });
+                this.logoutMethod();
+              }
+            } else {
+              this.$message.error('授权失败，仅管理员账号可授权退出');
+            }
+          })
+          .catch((err) => {
+            this.authLoading = false;
+            this.$message.error('账号或密码错误，授权失败');
+          });
       });
     },
     cancelUpdatePassword() {
@@ -502,6 +604,98 @@ export default {
     .v-modal {
       top: auto;
     }
+  }
+  .auth-warning-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 15px;
+    background: #fff2f0;
+    border: 1px solid #ffccc7;
+    border-radius: 4px;
+    margin-bottom: 22px;
+
+    i {
+      color: #ff4d4f;
+      font-size: 16px;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .auth-warning-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .auth-warning-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #262626;
+    }
+
+    span {
+      font-size: 13px;
+      color: #595959;
+      line-height: 1.5;
+    }
+  }
+}
+
+::v-deep .auth-warning-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 15px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+  margin-bottom: 22px;
+
+  i {
+    color: #ff4d4f;
+    font-size: 16px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .auth-warning-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .auth-warning-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #cf1322;
+  }
+
+  span {
+    font-size: 13px;
+    color: #595959;
+    line-height: 1.5;
+  }
+}
+
+::v-deep .el-dialog {
+  .el-dialog__header {
+    padding: 20px 20px 10px;
+
+    .el-dialog__title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #262626;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 10px 20px;
+  }
+
+  .el-dialog__footer {
+    padding: 10px 20px 20px;
+    text-align: right;
   }
 }
 </style>

@@ -471,29 +471,29 @@ export default {
   .fade-leave-to {
     opacity: 0;
   }
+}
 
-  .force-password-tip {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 12px 15px;
-    background: #fffbe6;
-    border: 1px solid #ffe58f;
-    border-radius: 4px;
-    margin-bottom: 22px;
+::v-deep .force-password-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 15px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 4px;
+  margin-bottom: 22px;
 
-    i {
-      color: #faad14;
-      font-size: 16px;
-      margin-top: 1px;
-      flex-shrink: 0;
-    }
+  i {
+    color: #faad14;
+    font-size: 16px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
 
-    span {
-      font-size: 13px;
-      color: #595959;
-      line-height: 1.5;
-    }
+  span {
+    font-size: 13px;
+    color: #595959;
+    line-height: 1.5;
   }
 }
 
