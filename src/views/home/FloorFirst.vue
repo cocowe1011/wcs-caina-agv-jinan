@@ -1,5 +1,5 @@
 <template>
-  <div class="content-wrapper">
+  <div class="content-wrapper" :class="{ 'readonly-mode': isOperator }">
     <!-- 左侧面板 -->
     <div class="side-info-panel">
       <!-- 排班计划区域 -->
@@ -483,7 +483,12 @@
               </div>
 
               <!-- 拆垛线控制按钮 -->
-              <div class="control-button-group" data-x="50" data-y="1400">
+              <div
+                class="control-button-group"
+                data-x="50"
+                data-y="1400"
+                v-if="!isOperator"
+              >
                 <div class="control-panel-title">
                   <i class="el-icon-share" style="margin-right: 5px"></i
                   >机械手控制操作
@@ -843,7 +848,7 @@
     </el-drawer>
 
     <!-- 添加测试按钮 -->
-    <div class="test-button-container">
+    <div class="test-button-container" v-if="!isOperator">
       <el-button type="info" size="mini" plain @click="showTestPanel">
         <i class="el-icon-setting"></i>
         测试
@@ -1440,8 +1445,10 @@ import HttpUtil from '@/utils/HttpUtil';
 import HttpUtilAGV from '@/utils/HttpUtilAGV';
 import moment from 'moment';
 import { ipcRenderer } from 'electron';
+import permissionMixin from '@/mixins/permissionMixin';
 // import AlarmWebSocketServer from '@/utils/WebSocketServer'; // 移动到主进程
 export default {
+  mixins: [permissionMixin],
   name: 'FloorFirst',
   props: {
     isActive: {
@@ -6552,6 +6559,78 @@ export default {
   .button-pressed.el-button--warning {
     background-color: #faad14;
     border-color: #faad14;
+  }
+}
+
+/* 操作员只读模式 - 仅禁用操作类元素，保留查看类功能 */
+.readonly-mode {
+  /* 排班计划：禁用输入框 */
+  :deep(.schedule-actions) {
+    .el-input-number {
+      pointer-events: none;
+    }
+    .el-input__inner {
+      pointer-events: none;
+      cursor: not-allowed !important;
+      background-color: #f5f7fa !important;
+    }
+    .el-input-number__decrease,
+    .el-input-number__increase {
+      pointer-events: none;
+    }
+  }
+
+  /* AGV调度区域：禁用按钮和输入框 */
+  :deep(.agv-controls .el-button) {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed !important;
+  }
+
+  :deep(.agv-route-selector) {
+    .el-autocomplete {
+      pointer-events: none;
+    }
+    .el-input__inner {
+      pointer-events: none;
+      cursor: not-allowed !important;
+      background-color: #f5f7fa !important;
+    }
+  }
+
+  /* 机械臂面板：禁用清理按钮 */
+  :deep(.data-panel-mechanical-arm .el-button) {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed !important;
+  }
+
+  /* 隐藏卡片操作按钮区域（移动/移除） */
+  :deep(.card-actions) {
+    display: none !important;
+  }
+
+  /* 禁用锁定遮层点击 */
+  :deep(.lock-overlay) {
+    pointer-events: none;
+  }
+
+  /* 隐藏发送操作图标和面板 */
+  :deep(.send-action-icon),
+  :deep(.send-actions) {
+    display: none !important;
+  }
+
+  /* 抽屉标题中：隐藏批量解锁按钮，保留刷新按钮 */
+  :deep(.title-actions) {
+    display: none !important;
+  }
+
+  /* AGV任务管理中的取消按钮 */
+  :deep(.agv-task-management .el-button--danger) {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed !important;
   }
 }
 </style>

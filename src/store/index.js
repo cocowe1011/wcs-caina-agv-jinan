@@ -10,7 +10,8 @@ export default new Vuex.Store({
   },
   getters: {
     isLocked: (state) => state.isLocked,
-    isAdmin: (state) => state.userRole === 'ADMIN'
+    isAdmin: (state) => state.userRole === 'ADMIN',
+    isOperator: (state) => state.userRole === 'OPERATOR'
   },
   mutations: {
     SET_LOCKED(state, locked) {
