@@ -53,6 +53,11 @@
               >
             </el-dropdown-menu>
           </el-dropdown>
+          <i
+            class="el-icon-lock"
+            style="font-size: 18px; margin-right: 14px; cursor: pointer"
+            @click="lockScreen"
+          ></i>
           <el-dropdown
             trigger="click"
             @command="handelCommand"
@@ -242,6 +247,17 @@ export default {
       this.$nextTick(() => {
         ipcRenderer.send('logStatus', 'logout');
       });
+    },
+    lockScreen() {
+      this.$confirm('确认锁定屏幕吗？', '锁屏', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+        .then(() => {
+          this.$store.commit('SET_LOCKED', true);
+        })
+        .catch(() => {});
     },
     handelCommand(command) {
       switch (command) {

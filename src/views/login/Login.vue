@@ -64,6 +64,55 @@
         <div id="lodtext">系统正在启动中...&nbsp;请稍后...</div>
       </div>
     </transition>
+
+    <!-- 强制修改密码弹窗 -->
+    <el-dialog
+      title="密码已过期，请修改密码"
+      :visible.sync="showForceChangePassword"
+      width="420px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+      append-to-body
+    >
+      <div class="force-password-tip">
+        <i class="el-icon-warning"></i>
+        <span
+          >您的密码已超过3个月未修改，为确保账号安全，请立即修改密码后继续使用。</span
+        >
+      </div>
+      <el-form
+        :model="forcePasswordForm"
+        ref="forcePasswordForm"
+        :rules="forcePasswordRules"
+        label-width="90px"
+      >
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input
+            v-model="forcePasswordForm.newPassword"
+            type="password"
+            placeholder="请输入新密码"
+            show-password
+          ></el-input>
+        </el-form-item>
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input
+            v-model="forcePasswordForm.confirmPassword"
+            type="password"
+            placeholder="请再次输入新密码"
+            show-password
+          ></el-input>
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button
+          type="primary"
+          @click="submitForceChangePassword"
+          :loading="forcePasswordLoading"
+          >确认修改</el-button
+        >
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -77,6 +126,15 @@ export default {
   components: {},
   props: {},
   data() {
+    const validateForcePass2 = (rule, value, callback) => {
+      if (value === '') {
+        callback(new Error('请再次输入密码'));
+      } else if (value !== this.forcePasswordForm.newPassword) {
+        callback(new Error('两次输入密码不一致'));
+      } else {
+        callback();
+      }
+    };
     return {
       userCode: '',
       userPassword: '',
@@ -84,7 +142,21 @@ export default {
       javaAppStarted: false,
       javaAppUrl: process.env.VUE_APP_BASE_URL + '/status/check',
       maxRetries: 30,
-      retryInterval: 1000
+      retryInterval: 1000,
+      showForceChangePassword: false,
+      forcePasswordLoading: false,
+      forcePasswordForm: {
+        newPassword: '',
+        confirmPassword: ''
+      },
+      forcePasswordRules: {
+        newPassword: [
+          { required: true, message: '请输入新密码', trigger: 'blur' }
+        ],
+        confirmPassword: [
+          { required: true, validator: validateForcePass2, trigger: 'blur' }
+        ]
+      }
     };
   },
   watch: {},
@@ -101,6 +173,12 @@ export default {
         .then((res) => {
           if (res.data) {
             remote.getGlobal('sharedObject').userInfo = res.data;
+            // 判断密码是否过期，过期则弹出强制修改密码弹窗
+            if (res.data.passwordExpired) {
+              this.loadingStatus = false;
+              this.showForceChangePassword = true;
+              return;
+            }
             // 根据用户角色跳转不同页面
             setTimeout(() => {
               this.loadingStatus = false;
@@ -159,6 +237,41 @@ export default {
             console.error('检查Java应用程序状态时发生错误', error);
           }
         });
+    },
+    submitForceChangePassword() {
+      this.$refs.forcePasswordForm.validate((valid) => {
+        if (valid) {
+          this.forcePasswordLoading = true;
+          const param = {
+            userPassword: this.forcePasswordForm.newPassword,
+            userCode: this.userCode
+          };
+          HttpUtil.post('/userInfo/updatePassword', param)
+            .then((res) => {
+              this.forcePasswordLoading = false;
+              if (res.data > 0) {
+                this.$message.success('密码修改成功，正在进入系统...');
+                this.showForceChangePassword = false;
+                // 跳转主页
+                this.$nextTick(() => {
+                  this.$router.replace({
+                    path: '/homePage/welcomPage',
+                    query: {
+                      userRole:
+                        remote.getGlobal('sharedObject').userInfo.userRole
+                    }
+                  });
+                });
+              } else {
+                this.$message.error(res.message || '密码修改失败');
+              }
+            })
+            .catch((err) => {
+              this.forcePasswordLoading = false;
+              this.$message.error('密码修改失败');
+            });
+        }
+      });
     }
   },
   created() {
@@ -357,6 +470,51 @@ export default {
   .fade-enter,
   .fade-leave-to {
     opacity: 0;
+  }
+
+  .force-password-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 15px;
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    border-radius: 4px;
+    margin-bottom: 22px;
+
+    i {
+      color: #faad14;
+      font-size: 16px;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    span {
+      font-size: 13px;
+      color: #595959;
+      line-height: 1.5;
+    }
+  }
+}
+
+::v-deep .el-dialog {
+  .el-dialog__header {
+    padding: 20px 20px 10px;
+
+    .el-dialog__title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #262626;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 10px 20px;
+  }
+
+  .el-dialog__footer {
+    padding: 10px 20px 20px;
+    text-align: right;
   }
 }
 </style>

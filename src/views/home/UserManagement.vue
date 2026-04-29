@@ -23,7 +23,7 @@
             icon="el-icon-plus"
             class="add-btn"
           >
-            添加操作员
+            添加账号
           </el-button>
         </div>
       </div>
@@ -114,6 +114,14 @@
                 >
                   管理员
                 </el-tag>
+                <el-tag
+                  v-else-if="scope.row.userRole === 'TECHNICIAN'"
+                  type="warning"
+                  size="small"
+                  effect="plain"
+                >
+                  工艺员
+                </el-tag>
                 <el-tag v-else type="primary" size="small" effect="plain">
                   操作员
                 </el-tag>
@@ -167,12 +175,19 @@
 
             <el-table-column
               label="操作"
-              width="200"
+              width="260"
               fixed="right"
               align="center"
             >
               <template slot-scope="scope">
                 <div class="action-buttons">
+                  <el-button
+                    size="mini"
+                    type="info"
+                    @click="handleEdit(scope.row)"
+                  >
+                    编辑
+                  </el-button>
                   <el-button
                     v-if="scope.row.isLocked === 1"
                     size="mini"
@@ -200,6 +215,7 @@
                     size="mini"
                     type="danger"
                     @click="handleDelete(scope.row)"
+                    v-if="scope.row.userCode !== currentUserCode"
                   >
                     删除
                   </el-button>
@@ -213,7 +229,7 @@
 
     <!-- 添加用户对话框 -->
     <el-dialog
-      title="添加操作员"
+      title="添加账号"
       :visible.sync="showAddUserDialog"
       width="450px"
       :close-on-click-modal="false"
@@ -246,6 +262,17 @@
             placeholder="请再次输入密码"
             show-password
           />
+        </el-form-item>
+        <el-form-item label="角色" prop="userRole">
+          <el-select
+            v-model="newUser.userRole"
+            placeholder="请选择角色"
+            style="width: 100%"
+          >
+            <el-option label="操作员" value="OPERATOR"></el-option>
+            <el-option label="工艺员" value="TECHNICIAN"></el-option>
+            <el-option label="管理员" value="ADMIN"></el-option>
+          </el-select>
         </el-form-item>
       </el-form>
       <span slot="footer" class="dialog-footer">
@@ -310,11 +337,56 @@
         </el-button>
       </span>
     </el-dialog>
+
+    <!-- 编辑用户对话框 -->
+    <el-dialog
+      title="编辑用户"
+      :visible.sync="showEditDialog"
+      width="450px"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <el-form
+        :model="editUser"
+        ref="editForm"
+        :rules="editRules"
+        label-width="80px"
+      >
+        <el-form-item label="账号">
+          <el-input v-model="editUser.userCode" disabled />
+        </el-form-item>
+        <el-form-item label="姓名" prop="userName">
+          <el-input v-model="editUser.userName" placeholder="请输入姓名" />
+        </el-form-item>
+        <el-form-item label="角色" prop="userRole">
+          <el-select
+            v-model="editUser.userRole"
+            placeholder="请选择角色"
+            style="width: 100%"
+          >
+            <el-option label="操作员" value="OPERATOR"></el-option>
+            <el-option label="工艺员" value="TECHNICIAN"></el-option>
+            <el-option label="管理员" value="ADMIN"></el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="showEditDialog = false">取 消</el-button>
+        <el-button
+          type="primary"
+          @click="confirmEditUser"
+          :loading="editUserLoading"
+        >
+          确 定
+        </el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import HttpUtil from '@/utils/HttpUtil';
+const remote = require('electron').remote;
 
 export default {
   name: 'UserManagement',
@@ -357,14 +429,25 @@ export default {
       showResetPasswordDialog: false,
       addUserLoading: false,
       resetPasswordLoading: false,
+      currentUserCode:
+        remote.getGlobal('sharedObject').userInfo?.userCode || '', // 当前登录用户的账号
       refreshLoading: false,
       currentUser: null,
       newUser: {
         userCode: '',
         userName: '',
         userPassword: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        userRole: 'OPERATOR'
       },
+      editUser: {
+        userId: null,
+        userCode: '',
+        userName: '',
+        userRole: ''
+      },
+      showEditDialog: false,
+      editUserLoading: false,
       resetPasswordData: {
         newPassword: '',
         confirmPassword: ''
@@ -393,6 +476,10 @@ export default {
         confirmPassword: [
           { required: true, validator: validateResetPass2, trigger: 'blur' }
         ]
+      },
+      editRules: {
+        userName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+        userRole: [{ required: true, message: '请选择角色', trigger: 'change' }]
       },
       tableHeaderStyle: {
         background: '#f8f9fc',
@@ -473,7 +560,8 @@ export default {
           const param = {
             userCode: this.newUser.userCode,
             userName: this.newUser.userName,
-            userPassword: this.newUser.userPassword
+            userPassword: this.newUser.userPassword,
+            userRole: this.newUser.userRole
           };
 
           HttpUtil.post('/userInfo/registerOperator', param)
@@ -632,11 +720,53 @@ export default {
         userCode: '',
         userName: '',
         userPassword: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        userRole: 'OPERATOR'
       };
       if (this.$refs.userForm) {
         this.$refs.userForm.clearValidate();
       }
+    },
+
+    // 编辑用户
+    handleEdit(user) {
+      this.editUser = {
+        userId: user.userId,
+        userCode: user.userCode,
+        userName: user.userName,
+        userRole: user.userRole
+      };
+      this.showEditDialog = true;
+    },
+
+    // 确认编辑用户
+    confirmEditUser() {
+      this.$refs.editForm.validate((valid) => {
+        if (valid) {
+          this.editUserLoading = true;
+          const param = {
+            userId: this.editUser.userId,
+            userName: this.editUser.userName,
+            userRole: this.editUser.userRole
+          };
+
+          HttpUtil.post('/userInfo/updateUserInfo', param)
+            .then((res) => {
+              this.editUserLoading = false;
+              if (res.data) {
+                this.$message.success('编辑成功');
+                this.showEditDialog = false;
+                this.loadUserList();
+              } else {
+                this.$message.error(res.message || '编辑失败');
+              }
+            })
+            .catch((err) => {
+              this.editUserLoading = false;
+              this.$message.error('编辑失败');
+            });
+        }
+      });
     }
   },
   created() {},
