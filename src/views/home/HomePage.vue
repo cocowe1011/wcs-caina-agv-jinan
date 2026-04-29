@@ -2,7 +2,7 @@
   <div class="homePage">
     <div class="maskDiv">
       <div class="maskDiv-top">
-        <div class="maskDiv-top-left" @dblclick="maxWindow">
+        <div class="maskDiv-top-left" @dblclick="isAdmin && maxWindow">
           <img
             src="../../../build/icons/64x64.png"
             style="width: 38px; height: 38px"
@@ -82,13 +82,13 @@
           </el-dropdown>
           <div class="el-divider el-divider--vertical"></div>
         </div>
-        <div class="maskDiv-top-min" @click="minWindow">
+        <div class="maskDiv-top-min" @click="minWindow" v-if="isAdmin">
           <i
             class="el-icon-minus"
             style="font-size: 18px; font-weight: 600"
           ></i>
         </div>
-        <div class="maskDiv-top-max" @click="maxWindow">
+        <div class="maskDiv-top-max" @click="maxWindow" v-if="isAdmin">
           <i
             :class="
               windowSize === 'unmax-window'
@@ -230,7 +230,11 @@ export default {
     };
   },
   watch: {},
-  computed: {},
+  computed: {
+    isAdmin() {
+      return this.userRole === 'ADMIN';
+    }
+  },
   methods: {
     handleSelect(key, keyPath) {
       switch (key) {
@@ -284,9 +288,11 @@ export default {
       this.showAuthDialog = true;
     },
     minWindow() {
+      if (!this.isAdmin) return;
       ipcRenderer.send('min-window');
     },
     maxWindow() {
+      if (!this.isAdmin) return;
       this.windowSize =
         this.windowSize === 'unmax-window' ? 'max-window' : 'unmax-window';
       ipcRenderer.send('max-window', this.windowSize);
@@ -471,11 +477,15 @@ export default {
     }
   },
   created() {
+    // 获取用户角色
+    this.userRole = remote.getGlobal('sharedObject').userInfo.userRole || '';
+    // 同步角色到store
+    this.$store.commit('SET_USER_ROLE', this.userRole);
+    // 给主进程发送用户角色，用于窗口权限控制
+    ipcRenderer.send('set-user-role', this.userRole);
     // 给主进程发送消息，更改窗口大小，设置最小大小，默认全屏
     ipcRenderer.send('logStatus', 'login');
     this.changeIcon();
-    // 获取用户角色
-    this.userRole = remote.getGlobal('sharedObject').userInfo.userRole || '';
   },
   mounted() {}
 };

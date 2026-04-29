@@ -5,14 +5,19 @@ Vue.use(Vuex);
 
 export default new Vuex.Store({
   state: {
-    isLocked: false
+    isLocked: false,
+    userRole: ''
   },
   getters: {
-    isLocked: (state) => state.isLocked
+    isLocked: (state) => state.isLocked,
+    isAdmin: (state) => state.userRole === 'ADMIN'
   },
   mutations: {
     SET_LOCKED(state, locked) {
       state.isLocked = locked;
+    },
+    SET_USER_ROLE(state, role) {
+      state.userRole = role;
     }
   },
   actions: {},

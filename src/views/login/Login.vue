@@ -250,7 +250,6 @@ export default {
             .then((res) => {
               this.forcePasswordLoading = false;
               if (res.data > 0) {
-                this.$message.success('密码修改成功，正在进入系统...');
                 this.showForceChangePassword = false;
                 // 跳转主页
                 this.$nextTick(() => {

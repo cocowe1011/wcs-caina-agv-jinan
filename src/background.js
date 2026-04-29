@@ -154,6 +154,10 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   flushAllLogBuffers();
 });
+// 应用退出时注销所有全局快捷键
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
 
 // 单实例锁，防止应用被多开 - 必须在app.ready之前检查
 const gotTheLock = app.requestSingleInstanceLock();
@@ -176,6 +180,7 @@ global.sharedObject = {
   userInfo: {}
 };
 let mainWindow = null;
+let currentUserRole = ''; // 记录当前用户角色
 app.on('ready', () => {
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -208,10 +213,21 @@ app.on('ready', () => {
     mainWindow.loadURL('app://./index.html');
     // mainWindow.webContents.openDevTools();
   }
+  // 设置用户角色，用于主进程权限控制
+  ipcMain.on('set-user-role', (event, role) => {
+    currentUserRole = role;
+    if (mainWindow) {
+      // 根据角色设置窗口是否可调整大小
+      mainWindow.setResizable(role === 'ADMIN');
+      // 非ADMIN禁止最小化（阻止Win+↓、系统菜单最小化等）
+      mainWindow.setMinimizable(role === 'ADMIN');
+    }
+  });
   ipcMain.on('logStatus', (event, arg) => {
     console.log(arg);
     if (arg === 'login') {
-      mainWindow.setResizable(true);
+      mainWindow.setResizable(currentUserRole === 'ADMIN');
+      mainWindow.setMinimizable(currentUserRole === 'ADMIN');
       mainWindow.setBounds({
         x: 0,
         y: 0,
@@ -220,10 +236,13 @@ app.on('ready', () => {
       });
     } else {
       // 太几把坑了，windows系统setSize center方法失效 必须先mainWindow.unmaximize()
+      mainWindow.setResizable(true);
+      mainWindow.setMinimizable(true);
       mainWindow.unmaximize();
       mainWindow.setSize(1100, 600);
       mainWindow.center();
       global.sharedObject.userInfo = {};
+      currentUserRole = '';
       // mainWindow.setResizable(false)
     }
   });
@@ -231,8 +250,9 @@ app.on('ready', () => {
   ipcMain.on('close-window', function () {
     mainWindow.close();
   });
-  // 定义自定义事件
+  // 定义自定义事件 - 非ADMIN禁止最小化
   ipcMain.on('min-window', (event, arg) => {
+    if (currentUserRole !== 'ADMIN') return;
     mainWindow.minimize();
   });
   // writeValuesToPLC
@@ -277,8 +297,9 @@ app.on('ready', () => {
       event.reply('websocket-clients-list', []);
     }
   });
-  // 定义自定义事件
+  // 定义自定义事件 - 非ADMIN禁止最大化/调整大小
   ipcMain.on('max-window', (event, arg) => {
+    if (currentUserRole !== 'ADMIN') return;
     if (arg === 'max-window') {
       return mainWindow.maximize();
     }
@@ -299,6 +320,14 @@ app.on('ready', () => {
     //   console.log(writeStrArr.toString());
     // }, 50);
     // sendHeartToPLC()
+  });
+  // 非ADMIN用户：监听minimize事件，立即恢复窗口（拦截Win+D、Win+M等系统快捷键）
+  mainWindow.on('minimize', () => {
+    if (currentUserRole !== 'ADMIN') {
+      mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('mainWin-max', 'max-window');
@@ -451,6 +480,25 @@ app.on('ready', () => {
       ? mainWindow.setFullScreen(false)
       : mainWindow.setFullScreen(true);
   });
+  // 非ADMIN拦截系统快捷键：Win+D（显示桌面）、Win+M（最小化所有）
+  // 注意：Win+D是Windows Shell级快捷键，globalShortcut可能无法完全拦截
+  // 因此配合minimize事件监听作为兜底方案
+  try {
+    globalShortcut.register('Super+D', () => {
+      if (currentUserRole !== 'ADMIN') return;
+      // ADMIN允许：执行默认的显示桌面行为无法模拟，忽略即可
+    });
+  } catch (e) {
+    // 部分系统上Win组合键无法注册，忽略错误
+  }
+  try {
+    globalShortcut.register('Super+M', () => {
+      if (currentUserRole !== 'ADMIN') return;
+      // ADMIN允许：同样忽略
+    });
+  } catch (e) {
+    // 部分系统上Win组合键无法注册，忽略错误
+  }
   // 定义自定义事件
   ipcMain.on('full_screen', function () {
     mainWindow.isFullScreen()
