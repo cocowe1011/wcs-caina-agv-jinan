@@ -142,7 +142,7 @@
 
     <!-- 管理员授权弹窗 -->
     <el-dialog
-      title="退出授权验证"
+      :title="authDialogTitle"
       :visible.sync="showAuthDialog"
       width="460px"
       :close-on-click-modal="false"
@@ -152,9 +152,7 @@
         <i class="el-icon-warning"></i>
         <div class="auth-warning-text">
           <span class="auth-warning-title">风险提示</span>
-          <span
-            >关闭系统将中断所有正在运行的任务，AGV调度将停止，请确认是否需要退出。</span
-          >
+          <span>{{ authWarningText }}</span>
         </div>
       </div>
       <el-form
@@ -233,6 +231,25 @@ export default {
   computed: {
     isAdmin() {
       return this.userRole === 'ADMIN';
+    },
+    authDialogTitle() {
+      const titleMap = {
+        close: '退出授权验证',
+        logout: '退出授权验证',
+        updatePassword: '修改密码授权验证'
+      };
+      return titleMap[this.authAction] || '授权验证';
+    },
+    authWarningText() {
+      const textMap = {
+        close:
+          '关闭系统将中断所有正在运行的任务，AGV调度将停止，请确认是否需要退出。',
+        logout:
+          '退出登录将中断所有正在运行的任务，AGV调度将停止，请确认是否需要退出。',
+        updatePassword:
+          '修改密码后将强制退出登录，所有正在运行的任务将被中断，AGV调度将停止，请确认是否需要修改。'
+      };
+      return textMap[this.authAction] || '';
     }
   },
   methods: {
@@ -338,36 +355,12 @@ export default {
           this.showAuthDialog = true;
           break;
         case 'updatePassword':
-          this.$prompt('请输入注册账号时保存的姓名：', '敏感操作！验证用户！', {
-            confirmButtonText: '验证',
-            cancelButtonText: '取消'
-          })
-            .then(({ value }) => {
-              // 验证姓名是否正确
-              const param = {
-                userName: value,
-                userCode: remote.getGlobal('sharedObject').userInfo.userCode
-              };
-              HttpUtil.post('/userInfo/verifyName', param)
-                .then((res) => {
-                  if (res.data) {
-                    this.$message.success('验证通过！');
-                    // 打开修改密码的弹窗，可以修改密码
-                    this.dialogFormVisible = true;
-                  } else {
-                    this.$message.error('验证未通过！');
-                  }
-                })
-                .catch((err) => {
-                  this.$message.error('验证未通过！请重试！');
-                });
-            })
-            .catch(() => {
-              this.$message({
-                type: 'info',
-                message: '取消验证！'
-              });
-            });
+          if (this.userRole !== 'ADMIN') {
+            this.authAction = 'updatePassword';
+            this.showAuthDialog = true;
+            return;
+          }
+          this.showNameVerifyPrompt();
           break;
         default:
           break;
@@ -423,6 +416,8 @@ export default {
                   duration: 2000
                 });
                 this.logoutMethod();
+              } else if (this.authAction === 'updatePassword') {
+                this.showNameVerifyPrompt();
               }
             } else {
               this.$message.error('授权失败，仅管理员账号可授权退出');
@@ -433,6 +428,38 @@ export default {
             this.$message.error('账号或密码错误，授权失败');
           });
       });
+    },
+    showNameVerifyPrompt() {
+      this.$prompt('请输入注册账号时保存的姓名：', '敏感操作！验证用户！', {
+        confirmButtonText: '验证',
+        cancelButtonText: '取消'
+      })
+        .then(({ value }) => {
+          // 验证姓名是否正确
+          const param = {
+            userName: value,
+            userCode: remote.getGlobal('sharedObject').userInfo.userCode
+          };
+          HttpUtil.post('/userInfo/verifyName', param)
+            .then((res) => {
+              if (res.data) {
+                this.$message.success('验证通过！');
+                // 打开修改密码的弹窗，可以修改密码
+                this.dialogFormVisible = true;
+              } else {
+                this.$message.error('验证未通过！');
+              }
+            })
+            .catch((err) => {
+              this.$message.error('验证未通过！请重试！');
+            });
+        })
+        .catch(() => {
+          this.$message({
+            type: 'info',
+            message: '取消验证！'
+          });
+        });
     },
     cancelUpdatePassword() {
       this.dialogFormVisible = false;
