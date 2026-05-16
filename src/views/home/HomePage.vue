@@ -202,7 +202,7 @@ export default {
   data() {
     return {
       activeIndex: '1',
-      windowSize: 'max-window',
+      windowSize: 'max-window', // 初始状态为最大化
       showLogout: true,
       dialogFormVisible: false,
       updatePasswordForm: {
@@ -308,11 +308,18 @@ export default {
       ipcRenderer.send('min-window');
     },
     maxWindow() {
-      this.windowSize =
+      // 根据当前状态发送对应的操作指令
+      // 如果当前是最大化，发送还原指令；如果当前是还原，发送最大化指令
+      const action =
         this.windowSize === 'unmax-window' ? 'max-window' : 'unmax-window';
-      ipcRenderer.send('max-window', this.windowSize);
+      ipcRenderer.send('max-window', action);
     },
     fullScreen() {
+      // 全屏切换前，如果窗口是最大化状态，先还原
+      if (this.windowSize === 'max-window') {
+        this.windowSize = 'unmax-window';
+        ipcRenderer.send('max-window', 'unmax-window');
+      }
       ipcRenderer.send('full_screen');
     },
     logoutMethod() {

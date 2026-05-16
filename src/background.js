@@ -222,12 +222,8 @@ app.on('ready', () => {
   ipcMain.on('logStatus', (event, arg) => {
     console.log(arg);
     if (arg === 'login') {
-      mainWindow.setBounds({
-        x: 0,
-        y: 0,
-        width: screen.getPrimaryDisplay().workAreaSize.width,
-        height: screen.getPrimaryDisplay().workAreaSize.height
-      });
+      // 登录成功后，窗口最大化
+      mainWindow.maximize();
     } else {
       // 太几把坑了，windows系统setSize center方法失效 必须先mainWindow.unmaximize()
       isFullScreenMode = false; // 重置全屏状态
@@ -293,16 +289,27 @@ app.on('ready', () => {
   });
   // 定义自定义事件 - 最大化/调整大小
   ipcMain.on('max-window', (event, arg) => {
-    if (arg === 'max-window') {
-      return mainWindow.maximize();
+    // 如果处于全屏模式，先退出全屏
+    if (isFullScreenMode) {
+      toggleFullScreen();
     }
-    mainWindow.unmaximize();
-    mainWindow.setBounds({
-      x: 10,
-      y: 10,
-      width: screen.getPrimaryDisplay().workAreaSize.width - 20,
-      height: screen.getPrimaryDisplay().workAreaSize.height - 20
-    });
+
+    if (arg === 'max-window') {
+      // 最大化窗口
+      if (!mainWindow.isMaximized()) {
+        mainWindow.maximize();
+      }
+      return;
+    }
+    // 还原窗口：从最大化还原到稍小的窗口
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    }
+    // 设置为比工作区稍小的窗口（宽度-50，高度-80，居中显示）
+    const workAreaSize = screen.getPrimaryDisplay().workAreaSize;
+    mainWindow.setResizable(true);
+    mainWindow.setSize(workAreaSize.width - 50, workAreaSize.height - 80);
+    mainWindow.center();
   });
   // 启动plc conPLC
   ipcMain.on('conPLC', (event, arg1, arg2) => {
@@ -522,16 +529,20 @@ app.on('ready', () => {
 function toggleFullScreen() {
   if (!mainWindow) return;
 
+  // 如果窗口是最大化状态，先还原
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  }
+
   if (isFullScreenMode) {
     // 退出全屏：恢复工作区大小（不含任务栏）
     isFullScreenMode = false;
-    mainWindow.setAlwaysOnTop(false);
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     mainWindow.setBounds({ x: 0, y: 0, width, height });
+    mainWindow.setAlwaysOnTop(false);
   } else {
     // 进入全屏：覆盖整个屏幕（含任务栏区域）
     isFullScreenMode = true;
-    mainWindow.setAlwaysOnTop(false);
     const { width, height } = screen.getPrimaryDisplay().bounds;
     mainWindow.setBounds({ x: 0, y: 0, width, height });
     // 使用floating级别确保窗口在任务栏之上

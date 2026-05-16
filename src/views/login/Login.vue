@@ -1,5 +1,5 @@
 <template>
-  <div class="login">
+  <div class="login" @dblclick.prevent>
     <div class="login-left">
       <img src="./img/imgs_register.png" alt="免费注册" />
     </div>
@@ -74,6 +74,7 @@
       :close-on-press-escape="false"
       :show-close="false"
       append-to-body
+      @close="resetForcePasswordForm"
     >
       <div class="force-password-tip">
         <i class="el-icon-warning"></i>
@@ -109,6 +110,7 @@
           type="primary"
           @click="submitForceChangePassword"
           :loading="forcePasswordLoading"
+          :disabled="forcePasswordLoading"
           >确认修改</el-button
         >
       </span>
@@ -250,25 +252,33 @@ export default {
             .then((res) => {
               this.forcePasswordLoading = false;
               if (res.data > 0) {
+                this.$message.success('密码修改成功，请重新登录');
                 this.showForceChangePassword = false;
-                // 跳转主页
-                this.$nextTick(() => {
-                  this.$router.replace({
-                    path: '/homePage/welcomPage',
-                    query: {
-                      userRole:
-                        remote.getGlobal('sharedObject').userInfo.userRole
-                    }
-                  });
-                });
+                // 清空密码字段，让用户重新登录
+                this.userPassword = '';
+                this.resetForcePasswordForm();
               } else {
                 this.$message.error(res.message || '密码修改失败');
               }
             })
             .catch((err) => {
               this.forcePasswordLoading = false;
-              this.$message.error('密码修改失败');
+              this.$message.error(
+                '密码修改失败: ' + (err.message || '网络错误')
+              );
             });
+        }
+      });
+    },
+    resetForcePasswordForm() {
+      // 重置表单
+      this.forcePasswordForm = {
+        newPassword: '',
+        confirmPassword: ''
+      };
+      this.$nextTick(() => {
+        if (this.$refs.forcePasswordForm) {
+          this.$refs.forcePasswordForm.resetFields();
         }
       });
     }
@@ -290,7 +300,7 @@ export default {
   display: flex;
   &-left {
     pointer-events: none;
-    -webkit-app-region: drag;
+    -webkit-app-region: no-drag;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -304,6 +314,7 @@ export default {
     width: calc(100% - 690px);
     height: 100%;
     padding-left: 28px;
+    -webkit-app-region: no-drag;
     &-top {
       height: 45px;
       width: 100%;
@@ -311,7 +322,7 @@ export default {
       &-left {
         flex: 1;
         height: 100%;
-        -webkit-app-region: drag;
+        -webkit-app-region: no-drag;
         line-height: 45px;
         text-align: left;
         padding-left: 10px;
@@ -497,6 +508,8 @@ export default {
 }
 
 ::v-deep .el-dialog {
+  -webkit-app-region: no-drag;
+
   .el-dialog__header {
     padding: 20px 20px 10px;
 
@@ -515,5 +528,9 @@ export default {
     padding: 10px 20px 20px;
     text-align: right;
   }
+}
+
+::v-deep .el-dialog__wrapper {
+  -webkit-app-region: no-drag;
 }
 </style>
