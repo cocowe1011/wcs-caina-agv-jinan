@@ -2,7 +2,7 @@
   <div class="homePage">
     <div class="maskDiv">
       <div class="maskDiv-top">
-        <div class="maskDiv-top-left" @dblclick="isAdmin && maxWindow">
+        <div class="maskDiv-top-left" @dblclick="maxWindow">
           <img
             src="../../../build/icons/64x64.png"
             style="width: 38px; height: 38px"
@@ -82,13 +82,13 @@
           </el-dropdown>
           <div class="el-divider el-divider--vertical"></div>
         </div>
-        <div class="maskDiv-top-min" @click="minWindow" v-if="isAdmin">
+        <div class="maskDiv-top-min" @click="minWindow">
           <i
             class="el-icon-minus"
             style="font-size: 18px; font-weight: 600"
           ></i>
         </div>
-        <div class="maskDiv-top-max" @click="maxWindow" v-if="isAdmin">
+        <div class="maskDiv-top-max" @click="maxWindow">
           <i
             :class="
               windowSize === 'unmax-window'
@@ -305,11 +305,9 @@ export default {
       this.showAuthDialog = true;
     },
     minWindow() {
-      if (!this.isAdmin) return;
       ipcRenderer.send('min-window');
     },
     maxWindow() {
-      if (!this.isAdmin) return;
       this.windowSize =
         this.windowSize === 'unmax-window' ? 'max-window' : 'unmax-window';
       ipcRenderer.send('max-window', this.windowSize);

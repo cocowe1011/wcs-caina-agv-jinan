@@ -218,22 +218,10 @@ app.on('ready', () => {
   // 设置用户角色，用于主进程权限控制
   ipcMain.on('set-user-role', (event, role) => {
     currentUserRole = role;
-    if (mainWindow) {
-      // 根据角色设置窗口是否可调整大小
-      mainWindow.setResizable(role === 'ADMIN');
-      // 非ADMIN禁止最小化（阻止Win+↓、系统菜单最小化等）
-      mainWindow.setMinimizable(role === 'ADMIN');
-      // 非ADMIN用户设置窗口置顶，防止Win+D显示桌面导致窗口最小化
-      mainWindow.setAlwaysOnTop(role !== 'ADMIN', 'normal');
-    }
   });
   ipcMain.on('logStatus', (event, arg) => {
     console.log(arg);
     if (arg === 'login') {
-      mainWindow.setResizable(currentUserRole === 'ADMIN');
-      mainWindow.setMinimizable(currentUserRole === 'ADMIN');
-      // 非ADMIN用户设置窗口置顶，防止Win+D显示桌面导致窗口最小化
-      mainWindow.setAlwaysOnTop(currentUserRole !== 'ADMIN', 'normal');
       mainWindow.setBounds({
         x: 0,
         y: 0,
@@ -244,9 +232,6 @@ app.on('ready', () => {
       // 太几把坑了，windows系统setSize center方法失效 必须先mainWindow.unmaximize()
       isFullScreenMode = false; // 重置全屏状态
       mainWindow.setResizable(true);
-      mainWindow.setMinimizable(true);
-      // 退出登录时取消窗口置顶
-      mainWindow.setAlwaysOnTop(false);
       mainWindow.unmaximize();
       mainWindow.setSize(1100, 600);
       mainWindow.center();
@@ -260,9 +245,8 @@ app.on('ready', () => {
     isCloseAuthorized = true; // 标记关闭已通过Vue层管理员验证
     mainWindow.close();
   });
-  // 定义自定义事件 - 非ADMIN禁止最小化
+  // 定义自定义事件 - 最小化窗口
   ipcMain.on('min-window', (event, arg) => {
-    if (currentUserRole !== 'ADMIN') return;
     mainWindow.minimize();
   });
   // writeValuesToPLC
@@ -307,9 +291,8 @@ app.on('ready', () => {
       event.reply('websocket-clients-list', []);
     }
   });
-  // 定义自定义事件 - 非ADMIN禁止最大化/调整大小
+  // 定义自定义事件 - 最大化/调整大小
   ipcMain.on('max-window', (event, arg) => {
-    if (currentUserRole !== 'ADMIN') return;
     if (arg === 'max-window') {
       return mainWindow.maximize();
     }
@@ -331,26 +314,6 @@ app.on('ready', () => {
     // }, 50);
     // sendHeartToPLC()
   });
-  // 非ADMIN用户：监听minimize事件，立即恢复窗口（拦截Win+D、Win+M等系统快捷键）
-  mainWindow.on('minimize', () => {
-    if (currentUserRole !== 'ADMIN') {
-      // 使用setTimeout确保在系统完成最小化操作后再恢复
-      setTimeout(() => {
-        mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-      }, 50);
-    }
-  });
-  // 非ADMIN用户：监听hide事件，防止通过托盘图标等方式隐藏窗口
-  mainWindow.on('hide', () => {
-    if (currentUserRole !== 'ADMIN') {
-      setTimeout(() => {
-        mainWindow.show();
-        mainWindow.focus();
-      }, 50);
-    }
-  });
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('mainWin-max', 'max-window');
   });
@@ -367,16 +330,18 @@ app.on('ready', () => {
       if (wasAlwaysOnTop) {
         mainWindow.setAlwaysOnTop(false);
       }
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: '提示',
-        message: '需要管理员授权才能关闭程序，请通过系统内关闭按钮操作。',
-        buttons: ['确定']
-      }).then(() => {
-        if (wasAlwaysOnTop) {
-          mainWindow.setAlwaysOnTop(true, 'normal');
-        }
-      });
+      dialog
+        .showMessageBox(mainWindow, {
+          type: 'info',
+          title: '提示',
+          message: '需要管理员授权才能关闭程序，请通过系统内关闭按钮操作。',
+          buttons: ['确定']
+        })
+        .then(() => {
+          if (wasAlwaysOnTop) {
+            mainWindow.setAlwaysOnTop(true, 'normal');
+          }
+        });
       return;
     }
 
@@ -563,10 +528,6 @@ function toggleFullScreen() {
     mainWindow.setAlwaysOnTop(false);
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     mainWindow.setBounds({ x: 0, y: 0, width, height });
-    // 非ADMIN用户恢复防最小化置顶
-    if (currentUserRole !== 'ADMIN') {
-      mainWindow.setAlwaysOnTop(true, 'normal');
-    }
   } else {
     // 进入全屏：覆盖整个屏幕（含任务栏区域）
     isFullScreenMode = true;
