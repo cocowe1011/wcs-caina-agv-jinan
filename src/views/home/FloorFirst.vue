@@ -3100,6 +3100,24 @@ export default {
           toSiteCode,
           this.agvSchedule.endPosition
         );
+      } else if (
+        this.agvSchedule.startPosition.startsWith('D') &&
+        this.agvSchedule.endPosition.startsWith('D')
+      ) {
+        // 一楼D区到D区互相调度（D和D之间的互相调度），任务编号PF-FMR-COMMON-PY
+        await this.handleDToD(this.agvSchedule.startPosition, this.agvSchedule.endPosition);
+      } else if (
+        this.agvSchedule.startPosition.startsWith('E') &&
+        this.agvSchedule.endPosition.startsWith('E')
+      ) {
+        // 三楼E区到E区互相调度，任务编号PF-FMR-COMMON-PY
+        await this.handleEToE(this.agvSchedule.startPosition, this.agvSchedule.endPosition);
+      } else if (
+        this.agvSchedule.startPosition.startsWith('E') &&
+        this.isStackPosition(this.agvSchedule.endPosition)
+      ) {
+        // 三楼E区到巷道调度，任务编号PF-FMR-STACK-ALGO-QC
+        await this.handleEToStack(this.agvSchedule.startPosition, this.agvSchedule.endPosition);
       } else {
         // 说明起点是缓存区
         fromSiteCode = this.agvSchedule.startPosition;
@@ -3260,6 +3278,84 @@ export default {
         }
       }
     },
+
+    // 判断是否为巷道编号(如25013)
+    isStackPosition(position) {
+      return /^250(0[1-9]|1[0-3])$/i.test(position);
+    },
+
+    // 一楼D区到D区互相调度，纯命令模式，无队列校验
+    async handleDToD(startPos, endPos) {
+      this.agvSchedule.status = 'singleRunning';
+      try {
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-COMMON-PY',
+          startPos,
+          endPos
+        );
+        if (robotTaskCode !== '') {
+          this.addLog(`手动调度(D→D)：${startPos} → ${endPos}指令发送成功，任务码：${robotTaskCode}`);
+          this.$message.success(
+            `手动调度(D→D)：${startPos} → ${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+        } else {
+          this.addLog(`手动调度(D→D)：${startPos} → ${endPos}指令发送失败`);
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (e) {
+        this.addLog(`手动调度(D→D)：${startPos} → ${endPos}指令发送异常：${e}`);
+        this.$message.error('AGV指令发送异常');
+      }
+    },
+
+    // 三楼E区到E区互相调度，纯命令模式，无队列校验
+    async handleEToE(startPos, endPos) {
+      this.agvSchedule.status = 'singleRunning';
+      try {
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-COMMON-PY',
+          startPos,
+          endPos
+        );
+        if (robotTaskCode !== '') {
+          this.addLog(`手动调度(E→E)：${startPos} → ${endPos}指令发送成功，任务码：${robotTaskCode}`);
+          this.$message.success(
+            `手动调度(E→E)：${startPos} → ${endPos}指令发送成功，任务码：${robotTaskCode}`
+          );
+        } else {
+          this.addLog(`手动调度(E→E)：${startPos} → ${endPos}指令发送失败`);
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (e) {
+        this.addLog(`手动调度(E→E)：${startPos} → ${endPos}指令发送异常：${e}`);
+        this.$message.error('AGV指令发送异常');
+      }
+    },
+
+    // 三楼E区到巷道调度，纯命令模式，无队列校验
+    async handleEToStack(startPos, stackCode) {
+      this.agvSchedule.status = 'singleRunning';
+      try {
+        const robotTaskCode = await this.sendAgvCommand(
+          'PF-FMR-STACK-ALGO-QC',
+          startPos,
+          stackCode
+        );
+        if (robotTaskCode !== '') {
+          this.addLog(`手动调度(E→巷道)：${startPos} → 巷道${stackCode}指令发送成功，任务码：${robotTaskCode}`);
+          this.$message.success(
+            `手动调度(E→巷道)：${startPos} → 巷道${stackCode}指令发送成功，任务码：${robotTaskCode}`
+          );
+        } else {
+          this.addLog(`手动调度(E→巷道)：${startPos} → 巷道${stackCode}指令发送失败`);
+          this.$message.error('AGV指令发送失败');
+        }
+      } catch (e) {
+        this.addLog(`手动调度(E→巷道)：${startPos} → 巷道${stackCode}指令发送异常：${e}`);
+        this.$message.error('AGV指令发送异常');
+      }
+    },
+
     stopAgvSchedule() {
       if (this.agvSchedule.status === 'cycleRunning') {
         this.agvSchedule.status = 'idle';
@@ -3299,16 +3395,25 @@ export default {
           ]
         };
       } else {
-        // 其他任务类型的标准格式
+        // 其他任务类型的标准格式 - 根据巷道类型确定type值
+        const getRouteType = (siteCode) => {
+          // 巷道编号(如25013)使用 STACK 类型
+          if (this.isStackPosition(siteCode)) {
+            return 'STACK';
+          }
+          // 其他位置默认为 SITE 类型
+          return 'SITE';
+        };
+
         params = {
           taskType: taskType,
           targetRoute: [
             {
-              type: 'SITE',
+              type: getRouteType(fromSiteCode),
               code: fromSiteCode
             },
             {
-              type: 'SITE',
+              type: getRouteType(toSiteCode),
               code: toSiteCode
             }
           ]
