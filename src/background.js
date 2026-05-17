@@ -30,6 +30,7 @@ const path = require('path');
 const fs = require('fs');
 var appTray = null;
 let closeStatus = false;
+const config = require('./config');
 var conn = new nodes7();
 
 // WebSocket服务器实例
@@ -183,6 +184,8 @@ let mainWindow = null;
 let currentUserRole = ''; // 记录当前用户角色
 let isFullScreenMode = false; // 记录自定义全屏状态
 let isCloseAuthorized = false; // 标记关闭是否经过授权（区分Vue层验证和任务栏直接关闭）
+// 是否开启非管理员权限不让关闭/最大小化页面/改变窗口大小false不开启。true开启
+const enableWindowRestriction = config.enableWindowRestriction;
 app.on('ready', () => {
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -224,10 +227,21 @@ app.on('ready', () => {
     if (arg === 'login') {
       // 登录成功后，窗口最大化
       mainWindow.maximize();
+      if (enableWindowRestriction) {
+        mainWindow.setResizable(currentUserRole === 'ADMIN');
+        mainWindow.setMinimizable(currentUserRole === 'ADMIN');
+        mainWindow.setMovable(currentUserRole === 'ADMIN');
+        // 非ADMIN用户设置窗口置顶，防止Win+D显示桌面导致窗口最小化
+        mainWindow.setAlwaysOnTop(currentUserRole !== 'ADMIN', 'normal');
+      }
     } else {
       // 太几把坑了，windows系统setSize center方法失效 必须先mainWindow.unmaximize()
       isFullScreenMode = false; // 重置全屏状态
       mainWindow.setResizable(true);
+      mainWindow.setMinimizable(true);
+      mainWindow.setMovable(true);
+      // 退出登录时取消窗口置顶
+      mainWindow.setAlwaysOnTop(false);
       mainWindow.unmaximize();
       mainWindow.setSize(1100, 600);
       mainWindow.center();
@@ -241,8 +255,9 @@ app.on('ready', () => {
     isCloseAuthorized = true; // 标记关闭已通过Vue层管理员验证
     mainWindow.close();
   });
-  // 定义自定义事件 - 最小化窗口
+  // 定义自定义事件 - 非ADMIN禁止最小化
   ipcMain.on('min-window', (event, arg) => {
+    if (currentUserRole !== 'ADMIN' && enableWindowRestriction) return;
     mainWindow.minimize();
   });
   // writeValuesToPLC
@@ -287,8 +302,9 @@ app.on('ready', () => {
       event.reply('websocket-clients-list', []);
     }
   });
-  // 定义自定义事件 - 最大化/调整大小
+  // 定义自定义事件 - 非ADMIN禁止最大化/调整大小
   ipcMain.on('max-window', (event, arg) => {
+    if (currentUserRole !== 'ADMIN' && enableWindowRestriction) return;
     // 如果处于全屏模式，先退出全屏
     if (isFullScreenMode) {
       toggleFullScreen();
@@ -320,6 +336,26 @@ app.on('ready', () => {
     //   console.log(writeStrArr.toString());
     // }, 50);
     // sendHeartToPLC()
+  });
+  // 非ADMIN用户：监听minimize事件，立即恢复窗口（拦截Win+D、Win+M等系统快捷键）
+  mainWindow.on('minimize', () => {
+    if (currentUserRole !== 'ADMIN' && enableWindowRestriction) {
+      // 使用setTimeout确保在系统完成最小化操作后再恢复
+      setTimeout(() => {
+        mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }, 50);
+    }
+  });
+  // 非ADMIN用户：监听hide事件，防止通过托盘图标等方式隐藏窗口
+  mainWindow.on('hide', () => {
+    if (currentUserRole !== 'ADMIN' && enableWindowRestriction) {
+      setTimeout(() => {
+        mainWindow.show();
+        mainWindow.focus();
+      }, 50);
+    }
   });
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('mainWin-max', 'max-window');
@@ -537,12 +573,17 @@ function toggleFullScreen() {
   if (isFullScreenMode) {
     // 退出全屏：恢复工作区大小（不含任务栏）
     isFullScreenMode = false;
+    mainWindow.setAlwaysOnTop(false);
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     mainWindow.setBounds({ x: 0, y: 0, width, height });
-    mainWindow.setAlwaysOnTop(false);
+    // 非ADMIN用户恢复防最小化置顶
+    if (currentUserRole !== 'ADMIN' && enableWindowRestriction) {
+      mainWindow.setAlwaysOnTop(true, 'normal');
+    }
   } else {
     // 进入全屏：覆盖整个屏幕（含任务栏区域）
     isFullScreenMode = true;
+    mainWindow.setAlwaysOnTop(false);
     const { width, height } = screen.getPrimaryDisplay().bounds;
     mainWindow.setBounds({ x: 0, y: 0, width, height });
     // 使用floating级别确保窗口在任务栏之上

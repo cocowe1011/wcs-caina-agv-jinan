@@ -2,7 +2,11 @@
   <div class="homePage">
     <div class="maskDiv">
       <div class="maskDiv-top">
-        <div class="maskDiv-top-left" @dblclick="maxWindow">
+        <div
+          class="maskDiv-top-left"
+          :class="{ 'no-drag': !isAdmin && enableWindowRestriction }"
+          @dblclick="handleTitleDblclick"
+        >
           <img
             src="../../../build/icons/64x64.png"
             style="width: 38px; height: 38px"
@@ -82,13 +86,21 @@
           </el-dropdown>
           <div class="el-divider el-divider--vertical"></div>
         </div>
-        <div class="maskDiv-top-min" @click="minWindow">
+        <div
+          class="maskDiv-top-min"
+          @click="minWindow"
+          v-if="!enableWindowRestriction || isAdmin"
+        >
           <i
             class="el-icon-minus"
             style="font-size: 18px; font-weight: 600"
           ></i>
         </div>
-        <div class="maskDiv-top-max" @click="maxWindow">
+        <div
+          class="maskDiv-top-max"
+          @click="maxWindow"
+          v-if="!enableWindowRestriction || isAdmin"
+        >
           <i
             :class="
               windowSize === 'unmax-window'
@@ -192,6 +204,7 @@
 import { ipcRenderer } from 'electron';
 import StatusMonitor from '@/components/StatusMonitoring.vue';
 import HttpUtil from '@/utils/HttpUtil';
+import config from '@/config';
 const remote = require('electron').remote;
 export default {
   name: 'HomePage',
@@ -224,7 +237,9 @@ export default {
         adminPassword: [
           { required: true, message: '请输入管理员密码', trigger: 'blur' }
         ]
-      }
+      },
+      // 是否开启非管理员权限不让关闭/最大小化页面/改变窗口大小false不开启。true开启
+      enableWindowRestriction: config.enableWindowRestriction
     };
   },
   watch: {},
@@ -305,14 +320,24 @@ export default {
       this.showAuthDialog = true;
     },
     minWindow() {
+      if (!this.isAdmin && this.enableWindowRestriction) return;
       ipcRenderer.send('min-window');
     },
     maxWindow() {
+      if (!this.isAdmin && this.enableWindowRestriction) return;
       // 根据当前状态发送对应的操作指令
       // 如果当前是最大化，发送还原指令；如果当前是还原，发送最大化指令
       const action =
         this.windowSize === 'unmax-window' ? 'max-window' : 'unmax-window';
       ipcRenderer.send('max-window', action);
+    },
+    handleTitleDblclick(e) {
+      if (!this.isAdmin && this.enableWindowRestriction) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      this.maxWindow();
     },
     fullScreen() {
       // 全屏切换前，如果窗口是最大化状态，先还原
@@ -547,6 +572,9 @@ export default {
         display: flex;
         align-items: center;
         padding-left: 10px;
+        &.no-drag {
+          -webkit-app-region: no-drag;
+        }
         &-top-title {
           font-size: 16px;
           font-weight: 550;
